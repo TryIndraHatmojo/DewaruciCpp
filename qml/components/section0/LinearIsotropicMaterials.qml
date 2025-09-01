@@ -4,14 +4,105 @@ import QtQuick.Layouts 1.15
 
 Rectangle {
     id: root
-    width: parent ? parent.width : 800
-    height: 300
+    width: parent ? parent.width - 20 : 800  // Width sama dengan parent minus margin 20px (10px kiri + 10px kanan)
+    height: parent ? parent.height * 0.45 : 300  // Height 45% dari screen
+    anchors.centerIn: parent  // Center dalam parent untuk margin yang merata
     color: "#f5f5f5"
     border.color: "#2196F3"
     border.width: 2
     radius: 8
 
     property var tableModel: []
+    
+    // Property untuk menyimpan lebar kolom yang dapat di-resize
+    property var columnWidths: [
+        root.width * 0.10,  // Mat. No. - 10%
+        root.width * 0.12,  // E-Mod - 12%
+        root.width * 0.12,  // G-Mod - 12%
+        root.width * 0.12,  // Density - 12%
+        root.width * 0.12,  // Y. Stress - 12%
+        root.width * 0.12,  // Tensile S. - 12%
+        root.width * 0.19,  // Remark - 19%
+        root.width * 0.11   // Action - 11%
+    ]
+    
+    // Function untuk memastikan total lebar kolom tidak melebihi container
+    function adjustColumnWidths() {
+        var totalWidth = 0
+        for (var i = 0; i < columnWidths.length; i++) {
+            totalWidth += columnWidths[i]
+        }
+        
+        // Jika total melebihi lebar container, scale down proportionally
+        if (totalWidth > root.width - 4) {  // -4 untuk margin
+            var scaleFactor = (root.width - 4) / totalWidth
+            for (var j = 0; j < columnWidths.length; j++) {
+                columnWidths[j] = columnWidths[j] * scaleFactor
+            }
+        }
+    }
+    
+    // Function untuk resize kolom dengan penyesuaian otomatis kolom lain
+    function resizeColumn(columnIndex, newWidth) {
+        var minWidth = 50  // Lebar minimum untuk setiap kolom
+        var maxContainerWidth = root.width - 4  // Total lebar yang tersedia
+        
+        // Pastikan newWidth tidak kurang dari minimum
+        newWidth = Math.max(minWidth, newWidth)
+        
+        var newWidths = root.columnWidths.slice()  // Copy array
+        var oldWidth = newWidths[columnIndex]
+        var widthDifference = newWidth - oldWidth
+        
+        // Jika tidak ada perubahan, return
+        if (Math.abs(widthDifference) < 1) {
+            return
+        }
+        
+        // Update kolom yang di-resize
+        newWidths[columnIndex] = newWidth
+        
+        // Hitung sisa space yang tersedia untuk kolom lain
+        var remainingWidth = maxContainerWidth - newWidth
+        var otherColumnsCount = newWidths.length - 1
+        
+        if (otherColumnsCount > 0 && remainingWidth > 0) {
+            // Hitung total lebar kolom lain saat ini
+            var currentOtherColumnsWidth = 0
+            for (var i = 0; i < newWidths.length; i++) {
+                if (i !== columnIndex) {
+                    currentOtherColumnsWidth += newWidths[i]
+                }
+            }
+            
+            // Jika ada space untuk kolom lain
+            if (currentOtherColumnsWidth > 0) {
+                // Distribute remaining width proportionally
+                var scale = remainingWidth / currentOtherColumnsWidth
+                
+                for (var j = 0; j < newWidths.length; j++) {
+                    if (j !== columnIndex) {
+                        var scaledWidth = newWidths[j] * scale
+                        newWidths[j] = Math.max(minWidth, scaledWidth)
+                    }
+                }
+            } else {
+                // Jika kolom lain tidak ada lebar, bagi rata
+                var averageWidth = Math.max(minWidth, remainingWidth / otherColumnsCount)
+                for (var k = 0; k < newWidths.length; k++) {
+                    if (k !== columnIndex) {
+                        newWidths[k] = averageWidth
+                    }
+                }
+            }
+        }
+        
+        // Update columnWidths
+        root.columnWidths = newWidths
+    }
+    
+    // Panggil adjustColumnWidths ketika ukuran berubah
+    onWidthChanged: adjustColumnWidths()
 
     // Component.onCompleted untuk load data dari database
     Component.onCompleted: {
@@ -28,6 +119,12 @@ Rectangle {
             console.log("Database not connected, using sample data")
             // Fallback ke data sample jika database tidak tersedia
         }
+    }
+    
+    // Helper function untuk focus + select all
+    function focusAndSelect(targetInput) {
+        targetInput.forceActiveFocus()
+        targetInput.selectAll()
     }
     
     // Function untuk delete material
@@ -143,9 +240,10 @@ Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
             height: 35
+            clip: true  // Clip jika melebihi container
 
             Rectangle {
-                width: 80
+                width: root.columnWidths[0]
                 height: parent.height
                 color: "#e3f2fd"
                 border.color: "#ddd"
@@ -156,10 +254,40 @@ Rectangle {
                     font.pixelSize: 12
                     font.bold: true
                 }
+                
+                // Resize handle
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 4
+                    height: parent.height - 4
+                    color: "transparent"
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeHorCursor
+                        
+                        property real startX
+                        property real startWidth
+                        
+                        onPressed: {
+                            startX = mouse.x
+                            startWidth = parent.parent.width
+                        }
+                        
+                        onPositionChanged: {
+                            if (pressed) {
+                                var delta = mouse.x - startX
+                                var newWidth = Math.max(50, startWidth + delta)
+                                root.resizeColumn(0, newWidth)
+                            }
+                        }
+                    }
+                }
             }
 
             Rectangle {
-                width: 100
+                width: root.columnWidths[1]
                 height: parent.height
                 color: "#e3f2fd"
                 border.color: "#ddd"
@@ -171,10 +299,40 @@ Rectangle {
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
                 }
+                
+                // Resize handle
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 4
+                    height: parent.height - 4
+                    color: "transparent"
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeHorCursor
+                        
+                        property real startX
+                        property real startWidth
+                        
+                        onPressed: {
+                            startX = mouse.x
+                            startWidth = parent.parent.width
+                        }
+                        
+                        onPositionChanged: {
+                            if (pressed) {
+                                var delta = mouse.x - startX
+                                var newWidth = Math.max(50, startWidth + delta)
+                                root.resizeColumn(1, newWidth)
+                            }
+                        }
+                    }
+                }
             }
 
             Rectangle {
-                width: 100
+                width: root.columnWidths[2]
                 height: parent.height
                 color: "#e3f2fd"
                 border.color: "#ddd"
@@ -186,10 +344,40 @@ Rectangle {
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
                 }
+                
+                // Resize handle
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 4
+                    height: parent.height - 4
+                    color: "transparent"
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeHorCursor
+                        
+                        property real startX
+                        property real startWidth
+                        
+                        onPressed: {
+                            startX = mouse.x
+                            startWidth = parent.parent.width
+                        }
+                        
+                        onPositionChanged: {
+                            if (pressed) {
+                                var delta = mouse.x - startX
+                                var newWidth = Math.max(50, startWidth + delta)
+                                root.resizeColumn(2, newWidth)
+                            }
+                        }
+                    }
+                }
             }
 
             Rectangle {
-                width: 100
+                width: root.columnWidths[3]
                 height: parent.height
                 color: "#e3f2fd"
                 border.color: "#ddd"
@@ -201,10 +389,40 @@ Rectangle {
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
                 }
+                
+                // Resize handle
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 4
+                    height: parent.height - 4
+                    color: "transparent"
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeHorCursor
+                        
+                        property real startX
+                        property real startWidth
+                        
+                        onPressed: {
+                            startX = mouse.x
+                            startWidth = parent.parent.width
+                        }
+                        
+                        onPositionChanged: {
+                            if (pressed) {
+                                var delta = mouse.x - startX
+                                var newWidth = Math.max(50, startWidth + delta)
+                                root.resizeColumn(3, newWidth)
+                            }
+                        }
+                    }
+                }
             }
 
             Rectangle {
-                width: 100
+                width: root.columnWidths[4]
                 height: parent.height
                 color: "#e3f2fd"
                 border.color: "#ddd"
@@ -216,10 +434,40 @@ Rectangle {
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
                 }
+                
+                // Resize handle
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 4
+                    height: parent.height - 4
+                    color: "transparent"
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeHorCursor
+                        
+                        property real startX
+                        property real startWidth
+                        
+                        onPressed: {
+                            startX = mouse.x
+                            startWidth = parent.parent.width
+                        }
+                        
+                        onPositionChanged: {
+                            if (pressed) {
+                                var delta = mouse.x - startX
+                                var newWidth = Math.max(50, startWidth + delta)
+                                root.resizeColumn(4, newWidth)
+                            }
+                        }
+                    }
+                }
             }
 
             Rectangle {
-                width: 100
+                width: root.columnWidths[5]
                 height: parent.height
                 color: "#e3f2fd"
                 border.color: "#ddd"
@@ -231,10 +479,40 @@ Rectangle {
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
                 }
+                
+                // Resize handle
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 4
+                    height: parent.height - 4
+                    color: "transparent"
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeHorCursor
+                        
+                        property real startX
+                        property real startWidth
+                        
+                        onPressed: {
+                            startX = mouse.x
+                            startWidth = parent.parent.width
+                        }
+                        
+                        onPositionChanged: {
+                            if (pressed) {
+                                var delta = mouse.x - startX
+                                var newWidth = Math.max(50, startWidth + delta)
+                                root.resizeColumn(5, newWidth)
+                            }
+                        }
+                    }
+                }
             }
 
             Rectangle {
-                width: 100
+                width: root.columnWidths[6]
                 height: parent.height
                 color: "#e3f2fd"
                 border.color: "#ddd"
@@ -246,10 +524,40 @@ Rectangle {
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
                 }
+                
+                // Resize handle
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 4
+                    height: parent.height - 4
+                    color: "transparent"
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeHorCursor
+                        
+                        property real startX
+                        property real startWidth
+                        
+                        onPressed: {
+                            startX = mouse.x
+                            startWidth = parent.parent.width
+                        }
+                        
+                        onPositionChanged: {
+                            if (pressed) {
+                                var delta = mouse.x - startX
+                                var newWidth = Math.max(50, startWidth + delta)
+                                root.resizeColumn(6, newWidth)
+                            }
+                        }
+                    }
+                }
             }
 
             Rectangle {
-                width: 80
+                width: root.columnWidths[7]
                 height: parent.height
                 color: "#e3f2fd"
                 border.color: "#ddd"
@@ -272,9 +580,22 @@ Rectangle {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             clip: true
+            
+            // Hanya scroll vertical
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
             Column {
                 width: scrollView.width
+                
+                // Fungsi untuk menghitung total lebar kolom
+                function getTotalColumnWidth() {
+                    var total = 0
+                    for (var i = 0; i < columnWidths.length; i++) {
+                        total += columnWidths[i]
+                    }
+                    return Math.min(total, scrollView.width)  // Pastikan tidak melebihi container
+                }
                 
                 // Data rows
                 Repeater {
@@ -284,6 +605,8 @@ Rectangle {
                         property int rowIndex: index
                         property bool isEven: index % 2 === 0
                         property var materialData: modelData || {}
+                        width: parent.width  // Batasi lebar sesuai parent
+                        clip: true  // Clip jika melebihi container
                         
                         function updateMaterial() {
                             if (materialDatabase && materialDatabase.isDBConnected() && materialData.id) {
@@ -307,7 +630,7 @@ Rectangle {
 
                         // Mat No - Disabled (Abu-abu)
                         Rectangle {
-                            width: 80
+                            width: root.columnWidths[0]
                             height: 30
                             color: "#e0e0e0" // Abu-abu untuk disabled
                             border.color: "#ddd"
@@ -322,7 +645,7 @@ Rectangle {
 
                         // E-Modulus - Editable Number Input
                         Rectangle {
-                            width: 100
+                            width: root.columnWidths[1]
                             height: 30
                             color: parent.isEven ? "white" : "#f9f9f9"
                             border.color: "#ddd"
@@ -351,6 +674,7 @@ Rectangle {
                                         var prevRow = materialRepeater.itemAt(rowIndex - 1)
                                         if (prevRow && prevRow.children[1] && prevRow.children[1].children[0]) {
                                             prevRow.children[1].children[0].forceActiveFocus()
+                                            prevRow.children[1].children[0].selectAll()
                                         }
                                     }
                                 }
@@ -360,17 +684,41 @@ Rectangle {
                                         var nextRow = materialRepeater.itemAt(rowIndex + 1)
                                         if (nextRow && nextRow.children[1] && nextRow.children[1].children[0]) {
                                             nextRow.children[1].children[0].forceActiveFocus()
+                                            nextRow.children[1].children[0].selectAll()
                                         }
                                     } else {
                                         // Go to shadow row
                                         shadowEModInput.forceActiveFocus()
+                                        shadowEModInput.selectAll()
                                     }
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (cursorPosition >= text.length) {
+                                    if (selectedText.length > 0) {
+                                        // If text is highlighted, move cursor to end
+                                        cursorPosition = text.length
+                                        event.accepted = true
+                                    } else if (cursorPosition >= text.length) {
+                                        // If at end, move to next cell
                                         gModInput.forceActiveFocus()
-                                        gModInput.cursorPosition = 0
+                                        gModInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
+                                    }
+                                }
+                                
+                                Keys.onLeftPressed: {
+                                    if (selectedText.length > 0) {
+                                        // If text is highlighted, move cursor to beginning
+                                        cursorPosition = 0
+                                        event.accepted = true
+                                    } else if (cursorPosition <= 0) {
+                                        // Stay in first column - just move to beginning
+                                        cursorPosition = 0
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
@@ -382,7 +730,7 @@ Rectangle {
 
                         // G-Modulus - Editable Number Input
                         Rectangle {
-                            width: 100
+                            width: root.columnWidths[2]
                             height: 30
                             color: parent.isEven ? "white" : "#f9f9f9"
                             border.color: "#ddd"
@@ -409,6 +757,7 @@ Rectangle {
                                         var prevRow = materialRepeater.itemAt(rowIndex - 1)
                                         if (prevRow && prevRow.children[2] && prevRow.children[2].children[0]) {
                                             prevRow.children[2].children[0].forceActiveFocus()
+                                            prevRow.children[2].children[0].selectAll()
                                         }
                                     }
                                 }
@@ -418,23 +767,41 @@ Rectangle {
                                         var nextRow = materialRepeater.itemAt(rowIndex + 1)
                                         if (nextRow && nextRow.children[2] && nextRow.children[2].children[0]) {
                                             nextRow.children[2].children[0].forceActiveFocus()
+                                            nextRow.children[2].children[0].selectAll()
                                         }
                                     } else {
                                         shadowGModInput.forceActiveFocus()
+                                        shadowGModInput.selectAll()
                                     }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (cursorPosition <= 0) {
+                                    if (selectedText.length > 0) {
+                                        // If text is highlighted, move cursor to beginning
+                                        cursorPosition = 0
+                                        event.accepted = true
+                                    } else if (cursorPosition <= 0) {
+                                        // If at beginning, move to previous cell
                                         eModInput.forceActiveFocus()
-                                        eModInput.cursorPosition = eModInput.text.length
+                                        eModInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (cursorPosition >= text.length) {
+                                    if (selectedText.length > 0) {
+                                        // If text is highlighted, move cursor to end
+                                        cursorPosition = text.length
+                                        event.accepted = true
+                                    } else if (cursorPosition >= text.length) {
+                                        // If at end, move to next cell
                                         densityInput.forceActiveFocus()
-                                        densityInput.cursorPosition = 0
+                                        densityInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
@@ -446,7 +813,7 @@ Rectangle {
 
                         // Density - Editable Number Input
                         Rectangle {
-                            width: 100
+                            width: root.columnWidths[3]
                             height: 30
                             color: parent.isEven ? "white" : "#f9f9f9"
                             border.color: "#ddd"
@@ -473,6 +840,7 @@ Rectangle {
                                         var prevRow = materialRepeater.itemAt(rowIndex - 1)
                                         if (prevRow && prevRow.children[3] && prevRow.children[3].children[0]) {
                                             prevRow.children[3].children[0].forceActiveFocus()
+                                            prevRow.children[3].children[0].selectAll()
                                         }
                                     }
                                 }
@@ -482,23 +850,41 @@ Rectangle {
                                         var nextRow = materialRepeater.itemAt(rowIndex + 1)
                                         if (nextRow && nextRow.children[3] && nextRow.children[3].children[0]) {
                                             nextRow.children[3].children[0].forceActiveFocus()
+                                            nextRow.children[3].children[0].selectAll()
                                         }
                                     } else {
                                         shadowDensityInput.forceActiveFocus()
+                                        shadowDensityInput.selectAll()
                                     }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (cursorPosition <= 0) {
+                                    if (selectedText.length > 0) {
+                                        // If text is highlighted, move cursor to beginning
+                                        cursorPosition = 0
+                                        event.accepted = true
+                                    } else if (cursorPosition <= 0) {
+                                        // If at beginning, move to previous cell
                                         gModInput.forceActiveFocus()
-                                        gModInput.cursorPosition = gModInput.text.length
+                                        gModInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (cursorPosition >= text.length) {
+                                    if (selectedText.length > 0) {
+                                        // If text is highlighted, move cursor to end
+                                        cursorPosition = text.length
+                                        event.accepted = true
+                                    } else if (cursorPosition >= text.length) {
+                                        // If at end, move to next cell
                                         yieldStressInput.forceActiveFocus()
-                                        yieldStressInput.cursorPosition = 0
+                                        yieldStressInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
@@ -510,7 +896,7 @@ Rectangle {
 
                         // Yield Stress - Editable Number Input
                         Rectangle {
-                            width: 100
+                            width: root.columnWidths[4]
                             height: 30
                             color: parent.isEven ? "white" : "#f9f9f9"
                             border.color: "#ddd"
@@ -537,6 +923,7 @@ Rectangle {
                                         var prevRow = materialRepeater.itemAt(rowIndex - 1)
                                         if (prevRow && prevRow.children[4] && prevRow.children[4].children[0]) {
                                             prevRow.children[4].children[0].forceActiveFocus()
+                                            prevRow.children[4].children[0].selectAll()
                                         }
                                     }
                                 }
@@ -546,23 +933,37 @@ Rectangle {
                                         var nextRow = materialRepeater.itemAt(rowIndex + 1)
                                         if (nextRow && nextRow.children[4] && nextRow.children[4].children[0]) {
                                             nextRow.children[4].children[0].forceActiveFocus()
+                                            nextRow.children[4].children[0].selectAll()
                                         }
                                     } else {
                                         shadowYieldStressInput.forceActiveFocus()
+                                        shadowYieldStressInput.selectAll()
                                     }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (cursorPosition <= 0) {
+                                    if (selectedText.length > 0) {
+                                        cursorPosition = 0
+                                        event.accepted = true
+                                    } else if (cursorPosition <= 0) {
                                         densityInput.forceActiveFocus()
-                                        densityInput.cursorPosition = densityInput.text.length
+                                        densityInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (cursorPosition >= text.length) {
+                                    if (selectedText.length > 0) {
+                                        cursorPosition = text.length
+                                        event.accepted = true
+                                    } else if (cursorPosition >= text.length) {
                                         tensileStrengthInput.forceActiveFocus()
-                                        tensileStrengthInput.cursorPosition = 0
+                                        tensileStrengthInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
@@ -574,7 +975,7 @@ Rectangle {
 
                         // Tensile Strength - Editable Number Input
                         Rectangle {
-                            width: 100
+                            width: root.columnWidths[5]
                             height: 30
                             color: parent.isEven ? "white" : "#f9f9f9"
                             border.color: "#ddd"
@@ -601,6 +1002,7 @@ Rectangle {
                                         var prevRow = materialRepeater.itemAt(rowIndex - 1)
                                         if (prevRow && prevRow.children[5] && prevRow.children[5].children[0]) {
                                             prevRow.children[5].children[0].forceActiveFocus()
+                                            prevRow.children[5].children[0].selectAll()
                                         }
                                     }
                                 }
@@ -610,23 +1012,37 @@ Rectangle {
                                         var nextRow = materialRepeater.itemAt(rowIndex + 1)
                                         if (nextRow && nextRow.children[5] && nextRow.children[5].children[0]) {
                                             nextRow.children[5].children[0].forceActiveFocus()
+                                            nextRow.children[5].children[0].selectAll()
                                         }
                                     } else {
                                         shadowTensileStrengthInput.forceActiveFocus()
+                                        shadowTensileStrengthInput.selectAll()
                                     }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (cursorPosition <= 0) {
+                                    if (selectedText.length > 0) {
+                                        cursorPosition = 0
+                                        event.accepted = true
+                                    } else if (cursorPosition <= 0) {
                                         yieldStressInput.forceActiveFocus()
-                                        yieldStressInput.cursorPosition = yieldStressInput.text.length
+                                        yieldStressInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (cursorPosition >= text.length) {
+                                    if (selectedText.length > 0) {
+                                        cursorPosition = text.length
+                                        event.accepted = true
+                                    } else if (cursorPosition >= text.length) {
                                         remarkInput.forceActiveFocus()
-                                        remarkInput.cursorPosition = 0
+                                        remarkInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
@@ -638,7 +1054,7 @@ Rectangle {
 
                         // Remark - Editable Text Input
                         Rectangle {
-                            width: 100
+                            width: root.columnWidths[6]
                             height: 30
                             color: parent.isEven ? "white" : "#f9f9f9"
                             border.color: "#ddd"
@@ -663,6 +1079,7 @@ Rectangle {
                                         var prevRow = materialRepeater.itemAt(rowIndex - 1)
                                         if (prevRow && prevRow.children[6] && prevRow.children[6].children[0]) {
                                             prevRow.children[6].children[0].forceActiveFocus()
+                                            prevRow.children[6].children[0].selectAll()
                                         }
                                     }
                                 }
@@ -672,21 +1089,38 @@ Rectangle {
                                         var nextRow = materialRepeater.itemAt(rowIndex + 1)
                                         if (nextRow && nextRow.children[6] && nextRow.children[6].children[0]) {
                                             nextRow.children[6].children[0].forceActiveFocus()
+                                            nextRow.children[6].children[0].selectAll()
                                         }
                                     } else {
                                         shadowRemarkInput.forceActiveFocus()
+                                        shadowRemarkInput.selectAll()
                                     }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (cursorPosition <= 0) {
+                                    if (selectedText.length > 0) {
+                                        cursorPosition = 0
+                                        event.accepted = true
+                                    } else if (cursorPosition <= 0) {
                                         tensileStrengthInput.forceActiveFocus()
-                                        tensileStrengthInput.cursorPosition = tensileStrengthInput.text.length
+                                        tensileStrengthInput.selectAll()
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
                                     }
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    // Stay in same cell (last column)
+                                    if (selectedText.length > 0) {
+                                        cursorPosition = text.length
+                                        event.accepted = true
+                                    } else if (cursorPosition >= text.length) {
+                                        // Stay in last column - move cursor to end
+                                        cursorPosition = text.length
+                                        event.accepted = true
+                                    } else {
+                                        event.accepted = false  // Let default behavior handle cursor movement
+                                    }
                                 }
                                 
                                 onEditingFinished: {
@@ -697,7 +1131,7 @@ Rectangle {
 
                         // Action - Delete Button
                         Rectangle {
-                            width: 80
+                            width: root.columnWidths[7]
                             height: 30
                             color: parent.isEven ? "white" : "#f9f9f9"
                             border.color: "#ddd"
@@ -794,6 +1228,8 @@ Rectangle {
                 Row {
                     id: shadowRow
                     property bool isShadowRow: true
+                    width: parent.width  // Batasi lebar sesuai parent
+                    clip: true  // Clip jika melebihi container
                     
                     function resetToLastData(lastMaterial) {
                         shadowEModInput.text = lastMaterial.eMod || ""
@@ -822,7 +1258,7 @@ Rectangle {
 
                     // Mat No - Shadow (Auto increment)
                     Rectangle {
-                        width: 80
+                        width: root.columnWidths[0]
                         height: 30
                         color: "#f0f0f0" // Abu-abu terang untuk shadow
                         border.color: "#ddd"
@@ -838,7 +1274,7 @@ Rectangle {
 
                     // E-Modulus - Shadow Input
                     Rectangle {
-                        width: 100
+                        width: root.columnWidths[1]
                         height: 30
                         color: "#f8f8f8" // Abu-abu terang
                         border.color: "#ddd"
@@ -863,14 +1299,34 @@ Rectangle {
                                     var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
                                     if (lastRow && lastRow.children[1] && lastRow.children[1].children[0]) {
                                         lastRow.children[1].children[0].forceActiveFocus()
+                                        lastRow.children[1].children[0].selectAll()
                                     }
                                 }
                             }
                             
                             Keys.onRightPressed: {
-                                if (cursorPosition >= text.length) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
                                     shadowGModInput.forceActiveFocus()
-                                    shadowGModInput.cursorPosition = 0
+                                    shadowGModInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    // Stay in first column - move cursor to beginning  
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
@@ -882,7 +1338,7 @@ Rectangle {
 
                     // G-Modulus - Shadow Input
                     Rectangle {
-                        width: 100
+                        width: root.columnWidths[2]
                         height: 30
                         color: "#f8f8f8"
                         border.color: "#ddd"
@@ -909,21 +1365,34 @@ Rectangle {
                                     var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
                                     if (lastRow && lastRow.children[2] && lastRow.children[2].children[0]) {
                                         lastRow.children[2].children[0].forceActiveFocus()
+                                        lastRow.children[2].children[0].selectAll()
                                     }
                                 }
                             }
                             
                             Keys.onLeftPressed: {
-                                if (cursorPosition <= 0) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
                                     shadowEModInput.forceActiveFocus()
-                                    shadowEModInput.cursorPosition = shadowEModInput.text.length
+                                    shadowEModInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
                             Keys.onRightPressed: {
-                                if (cursorPosition >= text.length) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
                                     shadowDensityInput.forceActiveFocus()
-                                    shadowDensityInput.cursorPosition = 0
+                                    shadowDensityInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
@@ -935,7 +1404,7 @@ Rectangle {
 
                     // Density - Shadow Input
                     Rectangle {
-                        width: 100
+                        width: root.columnWidths[3]
                         height: 30
                         color: "#f8f8f8"
                         border.color: "#ddd"
@@ -962,21 +1431,34 @@ Rectangle {
                                     var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
                                     if (lastRow && lastRow.children[3] && lastRow.children[3].children[0]) {
                                         lastRow.children[3].children[0].forceActiveFocus()
+                                        lastRow.children[3].children[0].selectAll()
                                     }
                                 }
                             }
                             
                             Keys.onLeftPressed: {
-                                if (cursorPosition <= 0) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
                                     shadowGModInput.forceActiveFocus()
-                                    shadowGModInput.cursorPosition = shadowGModInput.text.length
+                                    shadowGModInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
                             Keys.onRightPressed: {
-                                if (cursorPosition >= text.length) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
                                     shadowYieldStressInput.forceActiveFocus()
-                                    shadowYieldStressInput.cursorPosition = 0
+                                    shadowYieldStressInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
@@ -988,7 +1470,7 @@ Rectangle {
 
                     // Yield Stress - Shadow Input
                     Rectangle {
-                        width: 100
+                        width: root.columnWidths[4]
                         height: 30
                         color: "#f8f8f8"
                         border.color: "#ddd"
@@ -1015,21 +1497,34 @@ Rectangle {
                                     var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
                                     if (lastRow && lastRow.children[4] && lastRow.children[4].children[0]) {
                                         lastRow.children[4].children[0].forceActiveFocus()
+                                        lastRow.children[4].children[0].selectAll()
                                     }
                                 }
                             }
                             
                             Keys.onLeftPressed: {
-                                if (cursorPosition <= 0) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
                                     shadowDensityInput.forceActiveFocus()
-                                    shadowDensityInput.cursorPosition = shadowDensityInput.text.length
+                                    shadowDensityInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
                             Keys.onRightPressed: {
-                                if (cursorPosition >= text.length) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
                                     shadowTensileStrengthInput.forceActiveFocus()
-                                    shadowTensileStrengthInput.cursorPosition = 0
+                                    shadowTensileStrengthInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
@@ -1041,7 +1536,7 @@ Rectangle {
 
                     // Tensile Strength - Shadow Input
                     Rectangle {
-                        width: 100
+                        width: root.columnWidths[5]
                         height: 30
                         color: "#f8f8f8"
                         border.color: "#ddd"
@@ -1073,16 +1568,28 @@ Rectangle {
                             }
                             
                             Keys.onLeftPressed: {
-                                if (cursorPosition <= 0) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
                                     shadowYieldStressInput.forceActiveFocus()
-                                    shadowYieldStressInput.cursorPosition = shadowYieldStressInput.text.length
+                                    shadowYieldStressInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
                             Keys.onRightPressed: {
-                                if (cursorPosition >= text.length) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
                                     shadowRemarkInput.forceActiveFocus()
-                                    shadowRemarkInput.cursorPosition = 0
+                                    shadowRemarkInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
@@ -1094,7 +1601,7 @@ Rectangle {
 
                     // Remark - Shadow Input
                     Rectangle {
-                        width: 100
+                        width: root.columnWidths[6]
                         height: 30
                         color: "#f8f8f8"
                         border.color: "#ddd"
@@ -1124,9 +1631,28 @@ Rectangle {
                             }
                             
                             Keys.onLeftPressed: {
-                                if (cursorPosition <= 0) {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
                                     shadowTensileStrengthInput.forceActiveFocus()
-                                    shadowTensileStrengthInput.cursorPosition = shadowTensileStrengthInput.text.length
+                                    shadowTensileStrengthInput.selectAll()
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    // Stay in last column - move cursor to end
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false  // Let default behavior handle cursor movement
                                 }
                             }
                             
@@ -1138,7 +1664,7 @@ Rectangle {
 
                     // Action - Add Button
                     Rectangle {
-                        width: 80
+                        width: root.columnWidths[7]
                         height: 30
                         color: "#f8f8f8"
                         border.color: "#ddd"
