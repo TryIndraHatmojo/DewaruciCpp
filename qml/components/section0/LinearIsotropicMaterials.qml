@@ -278,6 +278,7 @@ Rectangle {
                 
                 // Data rows
                 Repeater {
+                    id: materialRepeater
                     model: root.tableModel
                     delegate: Row {
                         property int rowIndex: index
@@ -340,6 +341,38 @@ Rectangle {
                                 
                                 KeyNavigation.tab: gModInput
                                 KeyNavigation.backtab: remarkInput // Previous row's last cell or this row's last cell
+                                KeyNavigation.up: eModInput // Will be set dynamically to previous row
+                                KeyNavigation.down: eModInput // Will be set dynamically to next row
+                                KeyNavigation.left: eModInput // Stay in same cell (first column)
+                                KeyNavigation.right: gModInput
+                                
+                                Keys.onUpPressed: {
+                                    if (rowIndex > 0) {
+                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
+                                        if (prevRow && prevRow.children[1] && prevRow.children[1].children[0]) {
+                                            prevRow.children[1].children[0].forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                
+                                Keys.onDownPressed: {
+                                    if (rowIndex < materialRepeater.count - 1) {
+                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
+                                        if (nextRow && nextRow.children[1] && nextRow.children[1].children[0]) {
+                                            nextRow.children[1].children[0].forceActiveFocus()
+                                        }
+                                    } else {
+                                        // Go to shadow row
+                                        shadowEModInput.forceActiveFocus()
+                                    }
+                                }
+                                
+                                Keys.onRightPressed: {
+                                    if (cursorPosition >= text.length) {
+                                        gModInput.forceActiveFocus()
+                                        gModInput.cursorPosition = 0
+                                    }
+                                }
                                 
                                 onEditingFinished: {
                                     parent.parent.updateMaterial()
@@ -368,6 +401,42 @@ Rectangle {
                                 
                                 KeyNavigation.tab: densityInput
                                 KeyNavigation.backtab: eModInput
+                                KeyNavigation.left: eModInput
+                                KeyNavigation.right: densityInput
+                                
+                                Keys.onUpPressed: {
+                                    if (rowIndex > 0) {
+                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
+                                        if (prevRow && prevRow.children[2] && prevRow.children[2].children[0]) {
+                                            prevRow.children[2].children[0].forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                
+                                Keys.onDownPressed: {
+                                    if (rowIndex < materialRepeater.count - 1) {
+                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
+                                        if (nextRow && nextRow.children[2] && nextRow.children[2].children[0]) {
+                                            nextRow.children[2].children[0].forceActiveFocus()
+                                        }
+                                    } else {
+                                        shadowGModInput.forceActiveFocus()
+                                    }
+                                }
+                                
+                                Keys.onLeftPressed: {
+                                    if (cursorPosition <= 0) {
+                                        eModInput.forceActiveFocus()
+                                        eModInput.cursorPosition = eModInput.text.length
+                                    }
+                                }
+                                
+                                Keys.onRightPressed: {
+                                    if (cursorPosition >= text.length) {
+                                        densityInput.forceActiveFocus()
+                                        densityInput.cursorPosition = 0
+                                    }
+                                }
                                 
                                 onEditingFinished: {
                                     parent.parent.updateMaterial()
@@ -396,6 +465,42 @@ Rectangle {
                                 
                                 KeyNavigation.tab: yieldStressInput
                                 KeyNavigation.backtab: gModInput
+                                KeyNavigation.left: gModInput
+                                KeyNavigation.right: yieldStressInput
+                                
+                                Keys.onUpPressed: {
+                                    if (rowIndex > 0) {
+                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
+                                        if (prevRow && prevRow.children[3] && prevRow.children[3].children[0]) {
+                                            prevRow.children[3].children[0].forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                
+                                Keys.onDownPressed: {
+                                    if (rowIndex < materialRepeater.count - 1) {
+                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
+                                        if (nextRow && nextRow.children[3] && nextRow.children[3].children[0]) {
+                                            nextRow.children[3].children[0].forceActiveFocus()
+                                        }
+                                    } else {
+                                        shadowDensityInput.forceActiveFocus()
+                                    }
+                                }
+                                
+                                Keys.onLeftPressed: {
+                                    if (cursorPosition <= 0) {
+                                        gModInput.forceActiveFocus()
+                                        gModInput.cursorPosition = gModInput.text.length
+                                    }
+                                }
+                                
+                                Keys.onRightPressed: {
+                                    if (cursorPosition >= text.length) {
+                                        yieldStressInput.forceActiveFocus()
+                                        yieldStressInput.cursorPosition = 0
+                                    }
+                                }
                                 
                                 onEditingFinished: {
                                     parent.parent.updateMaterial()
@@ -424,6 +529,42 @@ Rectangle {
                                 
                                 KeyNavigation.tab: tensileStrengthInput
                                 KeyNavigation.backtab: densityInput
+                                KeyNavigation.left: densityInput
+                                KeyNavigation.right: tensileStrengthInput
+                                
+                                Keys.onUpPressed: {
+                                    if (rowIndex > 0) {
+                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
+                                        if (prevRow && prevRow.children[4] && prevRow.children[4].children[0]) {
+                                            prevRow.children[4].children[0].forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                
+                                Keys.onDownPressed: {
+                                    if (rowIndex < materialRepeater.count - 1) {
+                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
+                                        if (nextRow && nextRow.children[4] && nextRow.children[4].children[0]) {
+                                            nextRow.children[4].children[0].forceActiveFocus()
+                                        }
+                                    } else {
+                                        shadowYieldStressInput.forceActiveFocus()
+                                    }
+                                }
+                                
+                                Keys.onLeftPressed: {
+                                    if (cursorPosition <= 0) {
+                                        densityInput.forceActiveFocus()
+                                        densityInput.cursorPosition = densityInput.text.length
+                                    }
+                                }
+                                
+                                Keys.onRightPressed: {
+                                    if (cursorPosition >= text.length) {
+                                        tensileStrengthInput.forceActiveFocus()
+                                        tensileStrengthInput.cursorPosition = 0
+                                    }
+                                }
                                 
                                 onEditingFinished: {
                                     parent.parent.updateMaterial()
@@ -452,6 +593,42 @@ Rectangle {
                                 
                                 KeyNavigation.tab: remarkInput
                                 KeyNavigation.backtab: yieldStressInput
+                                KeyNavigation.left: yieldStressInput
+                                KeyNavigation.right: remarkInput
+                                
+                                Keys.onUpPressed: {
+                                    if (rowIndex > 0) {
+                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
+                                        if (prevRow && prevRow.children[5] && prevRow.children[5].children[0]) {
+                                            prevRow.children[5].children[0].forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                
+                                Keys.onDownPressed: {
+                                    if (rowIndex < materialRepeater.count - 1) {
+                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
+                                        if (nextRow && nextRow.children[5] && nextRow.children[5].children[0]) {
+                                            nextRow.children[5].children[0].forceActiveFocus()
+                                        }
+                                    } else {
+                                        shadowTensileStrengthInput.forceActiveFocus()
+                                    }
+                                }
+                                
+                                Keys.onLeftPressed: {
+                                    if (cursorPosition <= 0) {
+                                        yieldStressInput.forceActiveFocus()
+                                        yieldStressInput.cursorPosition = yieldStressInput.text.length
+                                    }
+                                }
+                                
+                                Keys.onRightPressed: {
+                                    if (cursorPosition >= text.length) {
+                                        remarkInput.forceActiveFocus()
+                                        remarkInput.cursorPosition = 0
+                                    }
+                                }
                                 
                                 onEditingFinished: {
                                     parent.parent.updateMaterial()
@@ -479,6 +656,38 @@ Rectangle {
                                 
                                 // Tab akan pindah ke row berikutnya, kolom pertama
                                 KeyNavigation.backtab: tensileStrengthInput
+                                KeyNavigation.left: tensileStrengthInput
+                                
+                                Keys.onUpPressed: {
+                                    if (rowIndex > 0) {
+                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
+                                        if (prevRow && prevRow.children[6] && prevRow.children[6].children[0]) {
+                                            prevRow.children[6].children[0].forceActiveFocus()
+                                        }
+                                    }
+                                }
+                                
+                                Keys.onDownPressed: {
+                                    if (rowIndex < materialRepeater.count - 1) {
+                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
+                                        if (nextRow && nextRow.children[6] && nextRow.children[6].children[0]) {
+                                            nextRow.children[6].children[0].forceActiveFocus()
+                                        }
+                                    } else {
+                                        shadowRemarkInput.forceActiveFocus()
+                                    }
+                                }
+                                
+                                Keys.onLeftPressed: {
+                                    if (cursorPosition <= 0) {
+                                        tensileStrengthInput.forceActiveFocus()
+                                        tensileStrengthInput.cursorPosition = tensileStrengthInput.text.length
+                                    }
+                                }
+                                
+                                Keys.onRightPressed: {
+                                    // Stay in same cell (last column)
+                                }
                                 
                                 onEditingFinished: {
                                     parent.parent.updateMaterial()
@@ -647,6 +856,23 @@ Rectangle {
                             color: "#666"
                             
                             KeyNavigation.tab: shadowGModInput
+                            KeyNavigation.right: shadowGModInput
+                            
+                            Keys.onUpPressed: {
+                                if (materialRepeater.count > 0) {
+                                    var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
+                                    if (lastRow && lastRow.children[1] && lastRow.children[1].children[0]) {
+                                        lastRow.children[1].children[0].forceActiveFocus()
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (cursorPosition >= text.length) {
+                                    shadowGModInput.forceActiveFocus()
+                                    shadowGModInput.cursorPosition = 0
+                                }
+                            }
                             
                             Keys.onReturnPressed: {
                                 shadowRow.addMaterial()
@@ -675,6 +901,31 @@ Rectangle {
                             
                             KeyNavigation.tab: shadowDensityInput
                             KeyNavigation.backtab: shadowEModInput
+                            KeyNavigation.left: shadowEModInput
+                            KeyNavigation.right: shadowDensityInput
+                            
+                            Keys.onUpPressed: {
+                                if (materialRepeater.count > 0) {
+                                    var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
+                                    if (lastRow && lastRow.children[2] && lastRow.children[2].children[0]) {
+                                        lastRow.children[2].children[0].forceActiveFocus()
+                                    }
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (cursorPosition <= 0) {
+                                    shadowEModInput.forceActiveFocus()
+                                    shadowEModInput.cursorPosition = shadowEModInput.text.length
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (cursorPosition >= text.length) {
+                                    shadowDensityInput.forceActiveFocus()
+                                    shadowDensityInput.cursorPosition = 0
+                                }
+                            }
                             
                             Keys.onReturnPressed: {
                                 shadowRow.addMaterial()
@@ -703,6 +954,31 @@ Rectangle {
                             
                             KeyNavigation.tab: shadowYieldStressInput
                             KeyNavigation.backtab: shadowGModInput
+                            KeyNavigation.left: shadowGModInput
+                            KeyNavigation.right: shadowYieldStressInput
+                            
+                            Keys.onUpPressed: {
+                                if (materialRepeater.count > 0) {
+                                    var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
+                                    if (lastRow && lastRow.children[3] && lastRow.children[3].children[0]) {
+                                        lastRow.children[3].children[0].forceActiveFocus()
+                                    }
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (cursorPosition <= 0) {
+                                    shadowGModInput.forceActiveFocus()
+                                    shadowGModInput.cursorPosition = shadowGModInput.text.length
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (cursorPosition >= text.length) {
+                                    shadowYieldStressInput.forceActiveFocus()
+                                    shadowYieldStressInput.cursorPosition = 0
+                                }
+                            }
                             
                             Keys.onReturnPressed: {
                                 shadowRow.addMaterial()
@@ -731,6 +1007,31 @@ Rectangle {
                             
                             KeyNavigation.tab: shadowTensileStrengthInput
                             KeyNavigation.backtab: shadowDensityInput
+                            KeyNavigation.left: shadowDensityInput
+                            KeyNavigation.right: shadowTensileStrengthInput
+                            
+                            Keys.onUpPressed: {
+                                if (materialRepeater.count > 0) {
+                                    var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
+                                    if (lastRow && lastRow.children[4] && lastRow.children[4].children[0]) {
+                                        lastRow.children[4].children[0].forceActiveFocus()
+                                    }
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (cursorPosition <= 0) {
+                                    shadowDensityInput.forceActiveFocus()
+                                    shadowDensityInput.cursorPosition = shadowDensityInput.text.length
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (cursorPosition >= text.length) {
+                                    shadowTensileStrengthInput.forceActiveFocus()
+                                    shadowTensileStrengthInput.cursorPosition = 0
+                                }
+                            }
                             
                             Keys.onReturnPressed: {
                                 shadowRow.addMaterial()
@@ -759,6 +1060,31 @@ Rectangle {
                             
                             KeyNavigation.tab: shadowRemarkInput
                             KeyNavigation.backtab: shadowYieldStressInput
+                            KeyNavigation.left: shadowYieldStressInput
+                            KeyNavigation.right: shadowRemarkInput
+                            
+                            Keys.onUpPressed: {
+                                if (materialRepeater.count > 0) {
+                                    var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
+                                    if (lastRow && lastRow.children[5] && lastRow.children[5].children[0]) {
+                                        lastRow.children[5].children[0].forceActiveFocus()
+                                    }
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (cursorPosition <= 0) {
+                                    shadowYieldStressInput.forceActiveFocus()
+                                    shadowYieldStressInput.cursorPosition = shadowYieldStressInput.text.length
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (cursorPosition >= text.length) {
+                                    shadowRemarkInput.forceActiveFocus()
+                                    shadowRemarkInput.cursorPosition = 0
+                                }
+                            }
                             
                             Keys.onReturnPressed: {
                                 shadowRow.addMaterial()
@@ -786,6 +1112,23 @@ Rectangle {
                             
                             KeyNavigation.tab: shadowEModInput
                             KeyNavigation.backtab: shadowTensileStrengthInput
+                            KeyNavigation.left: shadowTensileStrengthInput
+                            
+                            Keys.onUpPressed: {
+                                if (materialRepeater.count > 0) {
+                                    var lastRow = materialRepeater.itemAt(materialRepeater.count - 1)
+                                    if (lastRow && lastRow.children[6] && lastRow.children[6].children[0]) {
+                                        lastRow.children[6].children[0].forceActiveFocus()
+                                    }
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (cursorPosition <= 0) {
+                                    shadowTensileStrengthInput.forceActiveFocus()
+                                    shadowTensileStrengthInput.cursorPosition = shadowTensileStrengthInput.text.length
+                                }
+                            }
                             
                             Keys.onReturnPressed: {
                                 shadowRow.addMaterial()
