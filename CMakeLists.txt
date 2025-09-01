@@ -10,12 +10,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(appDewaruciCpp
     main.cpp
-    src/database/DatabaseConfig.cpp
-    src/database/DatabaseManager.cpp
-    src/database/models/BaseModel.cpp
-    src/database/models/UserModel.cpp
-    src/database/DatabaseExample.cpp
-    src/utils/PathUtils.h
+    src/database/MaterialDatabase.cpp
 )
 
 qt_add_qml_module(appDewaruciCpp
@@ -23,6 +18,7 @@ qt_add_qml_module(appDewaruciCpp
     VERSION 1.0
     QML_FILES
         ./qml/Main.qml
+        ./qml/components/section0/LinearIsotropicMaterials.qml
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
