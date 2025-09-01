@@ -1,0 +1,31 @@
+# CMakeLists.txt untuk testing database path
+cmake_minimum_required(VERSION 3.16)
+
+project(DatabasePathTest VERSION 0.1 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(Qt6 REQUIRED COMPONENTS Core Sql)
+
+qt_standard_project_setup(REQUIRES 6.8)
+
+# Executable untuk testing
+qt_add_executable(testDatabasePath
+    test_database_path.cpp
+    src/database/DatabaseConfig.cpp
+    src/database/DatabaseManager.cpp
+    src/database/models/BaseModel.cpp
+    src/database/models/UserModel.cpp
+    src/utils/PathUtils.h
+)
+
+target_link_libraries(testDatabasePath
+    PRIVATE Qt6::Core Qt6::Sql
+)
+
+# Salin config file ke build directory
+configure_file(
+    ${CMAKE_SOURCE_DIR}/config/database.json
+    ${CMAKE_BINARY_DIR}/config/database.json
+    COPYONLY
+)

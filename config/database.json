@@ -1,0 +1,19 @@
+{
+  "database": {
+    "type": "sqlite",
+    "path": "~/DewaruciCpp/app/dewarucidb",
+    "name": "dewaruci.db",
+    "connectionName": "DewaruciConnection",
+    "options": {
+      "timeout": 30000,
+      "synchronous": "NORMAL",
+      "journal_mode": "WAL",
+      "foreign_keys": true
+    }
+  },
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "logQueries": false
+  }
+}
