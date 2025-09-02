@@ -5,6 +5,7 @@
 #include <QDebug>
 #include "src/database/DatabaseConnection.h"
 #include "src/database/models/LinearIsotropicMaterials.h"
+#include "src/controllers/StructureProfileTableController.h"
 
 int main(int argc, char *argv[])
 {
@@ -22,15 +23,20 @@ int main(int argc, char *argv[])
     // Create model instances
     LinearIsotropicMaterials* materialModel = new LinearIsotropicMaterials(&app);
     
+    // Create controller instances
+    StructureProfileTableController* profileController = new StructureProfileTableController(&app);
+    
     // Create tables
     if (DatabaseConnection::instance().isConnected()) {
         materialModel->createTable();
+        profileController->initialize();
     }
 
     QQmlApplicationEngine engine;
     
     // Register model instances to QML
     engine.rootContext()->setContextProperty("materialModel", materialModel);
+    engine.rootContext()->setContextProperty("profileController", profileController);
     
     QObject::connect(
         &engine,

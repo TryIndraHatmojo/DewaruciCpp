@@ -5,10 +5,10 @@ import "components/section0"
 
 ApplicationWindow {
     id: mainWindow
-    width: 1200
-    height: 800
+    width: 1400
+    height: 1000
     visible: true
-    title: qsTr("Dewaruci - Linear Isotropic Materials")
+    title: qsTr("Dewaruci - Linear Isotropic Materials & Profile Table")
 
     Rectangle {
         anchors.fill: parent
@@ -19,27 +19,32 @@ ApplicationWindow {
             anchors.margins: 20
             spacing: 20
 
-            // Header
-            Rectangle {
+            // Top panel - Linear Isotropic Materials
+            ColumnLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                color: "#2196F3"
-                radius: 8
+                Layout.fillHeight: true
+                Layout.preferredHeight: parent.height * 0.4
+                spacing: 10
 
-                Text {
-                    anchors.centerIn: parent
-                    text: "Material Properties Management"
-                    font.pixelSize: 24
-                    font.bold: true
-                    color: "white"
+                LinearIsotropicMaterials {
+                    id: materialTable
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                 }
             }
 
-            // Table component
-            LinearIsotropicMaterials {
-                id: materialTable
+            // Bottom panel - Profile Table
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredHeight: parent.height * 0.6
+                spacing: 10
+
+                ProfileTable {
+                    id: profileTable
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
             }
 
             // Footer with action buttons
@@ -52,8 +57,15 @@ ApplicationWindow {
                     anchors.fill: parent
                     spacing: 10
 
+                    // Material actions
+                    Text {
+                        text: "Materials:"
+                        font.bold: true
+                        color: "#2196F3"
+                    }
+
                     Button {
-                        text: "Add New Material"
+                        text: "Add Material"
                         onClicked: {
                             // Sample data untuk testing - bisa diganti dengan dialog input
                             if (materialModel) {
@@ -77,17 +89,25 @@ ApplicationWindow {
                         }
                     }
 
-                    Button {
-                        text: "Import Data"
-                        onClicked: {
-                            console.log("Import data clicked")
-                        }
+                    Rectangle {
+                        width: 1
+                        height: 30
+                        color: "#cccccc"
+                    }
+
+                    // Profile actions
+                    Text {
+                        text: "Profiles:"
+                        font.bold: true
+                        color: "#2196F3"
                     }
 
                     Button {
-                        text: "Export Data"
+                        text: "Load Sample Profiles"
                         onClicked: {
-                            console.log("Export data clicked")
+                            if (profileController) {
+                                profileController.loadSampleData()
+                            }
                         }
                     }
 
@@ -96,7 +116,7 @@ ApplicationWindow {
                     }
 
                     Button {
-                        text: "Save Changes"
+                        text: "Save All Changes"
                         highlighted: true
                         onClicked: {
                             if (materialModel) {
@@ -104,6 +124,9 @@ ApplicationWindow {
                                 materialTable.refreshData()
                             } else {
                                 console.log("Material model not available")
+                            }
+                            if (profileController) {
+                                profileTable.refreshData()
                             }
                         }
                     }

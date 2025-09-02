@@ -254,12 +254,13 @@ Rectangle {
             Rectangle {
                 width: root.columnWidths[0]
                 height: parent.height
-                color: "#e3f2fd"
+                color: "#1e4a6b"
                 border.color: "#ddd"
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "Mat. No."
+                    color: "white"
                     font.pixelSize: 12
                     font.bold: true
                 }
@@ -298,12 +299,13 @@ Rectangle {
             Rectangle {
                 width: root.columnWidths[1]
                 height: parent.height
-                color: "#e3f2fd"
+                color: "#1e4a6b"
                 border.color: "#ddd"
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "E-Mod\n[kN/mm²]"
+                    color: "white"
                     font.pixelSize: 12
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
@@ -343,12 +345,13 @@ Rectangle {
             Rectangle {
                 width: root.columnWidths[2]
                 height: parent.height
-                color: "#e3f2fd"
+                color: "#1e4a6b"
                 border.color: "#ddd"
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "G-Mod\n[kN/mm²]"
+                    color: "white"
                     font.pixelSize: 12
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
@@ -388,12 +391,13 @@ Rectangle {
             Rectangle {
                 width: root.columnWidths[3]
                 height: parent.height
-                color: "#e3f2fd"
+                color: "#1e4a6b"
                 border.color: "#ddd"
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "M. Density\n[kg/m³]"
+                    color: "white"
                     font.pixelSize: 12
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
@@ -433,12 +437,13 @@ Rectangle {
             Rectangle {
                 width: root.columnWidths[4]
                 height: parent.height
-                color: "#e3f2fd"
+                color: "#1e4a6b"
                 border.color: "#ddd"
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "Y. Stress\n[N/mm²]"
+                    color: "white"
                     font.pixelSize: 12
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
@@ -478,12 +483,13 @@ Rectangle {
             Rectangle {
                 width: root.columnWidths[5]
                 height: parent.height
-                color: "#e3f2fd"
+                color: "#1e4a6b"
                 border.color: "#ddd"
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "Tensile S.\n[N/mm²]"
+                    color: "white"
                     font.pixelSize: 12
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
@@ -523,12 +529,13 @@ Rectangle {
             Rectangle {
                 width: root.columnWidths[6]
                 height: parent.height
-                color: "#e3f2fd"
+                color: "#1e4a6b"
                 border.color: "#ddd"
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "Remark"
+                    color: "white"
                     font.pixelSize: 12
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
@@ -568,12 +575,13 @@ Rectangle {
             Rectangle {
                 width: root.columnWidths[7]
                 height: parent.height
-                color: "#e3f2fd"
+                color: "#1e4a6b"
                 border.color: "#ddd"
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "Action"
+                    color: "white"
                     font.pixelSize: 12
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter

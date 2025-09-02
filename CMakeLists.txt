@@ -12,6 +12,8 @@ qt_add_executable(appDewaruciCpp
     main.cpp
     src/database/DatabaseConnection.cpp
     src/database/models/LinearIsotropicMaterials.cpp
+    src/database/models/StructureProfileTable.cpp
+    src/controllers/StructureProfileTableController.cpp
 )
 
 qt_add_qml_module(appDewaruciCpp
@@ -20,6 +22,7 @@ qt_add_qml_module(appDewaruciCpp
     QML_FILES
         ./qml/Main.qml
         ./qml/components/section0/LinearIsotropicMaterials.qml
+        ./qml/components/section0/ProfileTable.qml
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
