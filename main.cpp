@@ -3,25 +3,34 @@
 #include <QQmlContext>
 #include <QDir>
 #include <QDebug>
-#include "src/database/MaterialDatabase.h"
+#include "src/database/DatabaseConnection.h"
+#include "src/database/models/LinearIsotropicMaterials.h"
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
 
-    // Initialize database
-    qDebug() << "Initializing material database...";
-    if (!MaterialDatabase::instance().initialize()) {
-        qCritical() << "Failed to initialize database:" << MaterialDatabase::instance().lastError();
+    // Initialize database connection
+    qDebug() << "Initializing database connection...";
+    if (!DatabaseConnection::instance().initialize()) {
+        qCritical() << "Failed to initialize database:" << DatabaseConnection::instance().lastError();
         // Continue anyway - app might still work without database
     } else {
-        qDebug() << "Material database initialized successfully";
+        qDebug() << "Database connection initialized successfully";
+    }
+
+    // Create model instances
+    LinearIsotropicMaterials* materialModel = new LinearIsotropicMaterials(&app);
+    
+    // Create tables
+    if (DatabaseConnection::instance().isConnected()) {
+        materialModel->createTable();
     }
 
     QQmlApplicationEngine engine;
     
-    // Register MaterialDatabase instance to QML
-    engine.rootContext()->setContextProperty("materialDatabase", &MaterialDatabase::instance());
+    // Register model instances to QML
+    engine.rootContext()->setContextProperty("materialModel", materialModel);
     
     QObject::connect(
         &engine,
@@ -34,7 +43,7 @@ int main(int argc, char *argv[])
     int result = app.exec();
     
     // Clean up database connection on exit
-    MaterialDatabase::instance().close();
+    DatabaseConnection::instance().close();
     
     return result;
 }

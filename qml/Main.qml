@@ -56,8 +56,8 @@ ApplicationWindow {
                         text: "Add New Material"
                         onClicked: {
                             // Sample data untuk testing - bisa diganti dengan dialog input
-                            if (materialDatabase && materialDatabase.isDBConnected()) {
-                                var success = materialDatabase.addMaterial(
+                            if (materialModel) {
+                                var success = materialModel.addMaterial(
                                     210000000, // E-Modulus
                                     80000000,  // G-Modulus  
                                     7850,      // Density
@@ -69,10 +69,10 @@ ApplicationWindow {
                                     console.log("Material added successfully")
                                     materialTable.refreshData()
                                 } else {
-                                    console.log("Failed to add material:", materialDatabase.getLastError())
+                                    console.log("Failed to add material:", materialModel.getLastError())
                                 }
                             } else {
-                                console.log("Database not connected")
+                                console.log("Material model not available")
                             }
                         }
                     }
@@ -99,11 +99,11 @@ ApplicationWindow {
                         text: "Save Changes"
                         highlighted: true
                         onClicked: {
-                            if (materialDatabase && materialDatabase.isDBConnected()) {
-                                console.log("Database is connected and ready")
+                            if (materialModel) {
+                                console.log("Material model is available")
                                 materialTable.refreshData()
                             } else {
-                                console.log("Database connection error:", materialDatabase ? materialDatabase.getLastError() : "MaterialDatabase not available")
+                                console.log("Material model not available")
                             }
                         }
                     }

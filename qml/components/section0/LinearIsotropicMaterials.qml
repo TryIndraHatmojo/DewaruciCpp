@@ -111,13 +111,22 @@ Rectangle {
     
     // Function untuk refresh data dari database
     function refreshData() {
-        if (materialDatabase && materialDatabase.isDBConnected()) {
-            var materials = materialDatabase.getAllMaterialsForQML()
-            tableModel = materials
-            console.log("Loaded", materials.length, "materials from database")
+        if (materialModel) {
+            var materials = materialModel.getAllMaterialsForQML()
+            // Validasi data - pastikan setiap item memiliki id
+            var validMaterials = []
+            for (var i = 0; i < materials.length; i++) {
+                if (materials[i] && materials[i].id !== undefined) {
+                    validMaterials.push(materials[i])
+                } else {
+                    console.warn("Skipping invalid material data at index", i)
+                }
+            }
+            tableModel = validMaterials
+            console.log("Loaded", validMaterials.length, "valid materials from database")
         } else {
-            console.log("Database not connected, using sample data")
-            // Fallback ke data sample jika database tidak tersedia
+            console.log("Material model not available, using sample data")
+            tableModel = [] // Set ke array kosong jika model tidak tersedia
         }
     }
     
@@ -129,34 +138,34 @@ Rectangle {
     
     // Function untuk delete material
     function deleteMaterial(index, materialId) {
-        if (materialDatabase && materialDatabase.isDBConnected()) {
-            if (materialDatabase.removeMaterial(materialId)) {
+        if (materialModel) {
+            if (materialModel.removeMaterial(materialId)) {
                 console.log("Material deleted successfully")
                 refreshData() // Refresh data setelah delete
             } else {
-                console.log("Failed to delete material:", materialDatabase.getLastError())
+                console.log("Failed to delete material:", materialModel.getLastError())
             }
         }
     }
     
     // Function untuk add material baru dari shadow row
     function addNewMaterial(eModulus, gModulus, density, yieldStress, tensileStrength, remark) {
-        if (materialDatabase && materialDatabase.isDBConnected()) {
-            if (materialDatabase.addMaterial(eModulus, gModulus, density, yieldStress, tensileStrength, remark)) {
+        if (materialModel) {
+            if (materialModel.addMaterial(eModulus, gModulus, density, yieldStress, tensileStrength, remark)) {
                 console.log("New material added successfully")
                 refreshData() // Refresh data setelah add
                 // Reset shadow row ke nilai default
                 resetShadowRow()
             } else {
-                console.log("Failed to add material:", materialDatabase.getLastError())
+                console.log("Failed to add material:", materialModel.getLastError())
             }
         }
     }
     
     // Function untuk reset shadow row ke data terakhir
     function resetShadowRow() {
-        if (materialDatabase && materialDatabase.isDBConnected()) {
-            var materials = materialDatabase.getAllMaterialsForQML()
+        if (materialModel) {
+            var materials = materialModel.getAllMaterialsForQML()
             if (materials.length > 0) {
                 var lastMaterial = materials[materials.length - 1]
                 shadowRow.resetToLastData(lastMaterial)
@@ -609,8 +618,8 @@ Rectangle {
                         clip: true  // Clip jika melebihi container
                         
                         function updateMaterial() {
-                            if (materialDatabase && materialDatabase.isDBConnected() && materialData.id) {
-                                var success = materialDatabase.updateMaterial(
+                            if (materialModel && materialData.id) {
+                                var success = materialModel.updateMaterial(
                                     materialData.id,
                                     parseInt(eModInput.text) || 0,
                                     parseInt(gModInput.text) || 0,
@@ -623,7 +632,7 @@ Rectangle {
                                     console.log("Material updated successfully")
                                     root.refreshData()
                                 } else {
-                                    console.log("Failed to update material:", materialDatabase.getLastError())
+                                    console.log("Failed to update material:", materialModel.getLastError())
                                 }
                             }
                         }
@@ -1215,8 +1224,25 @@ Rectangle {
                                     }
                                     
                                     onClicked: {
-                                        var materialId = parent.parent.parent.parent.materialData.id
-                                        root.deleteMaterial(parent.parent.parent.parent.rowIndex, materialId)
+                                        // Navigate to the Row that contains materialData
+                                        // MouseArea -> Rectangle (trash icon) -> Rectangle (action column) -> Row
+                                        var parentRow = parent.parent.parent
+                                        
+                                        console.log("Delete clicked - checking parent hierarchy:")
+                                        console.log("parentRow:", parentRow)
+                                        console.log("parentRow.materialData:", parentRow ? parentRow.materialData : "no parent")
+                                        
+                                        if (parentRow && parentRow.materialData && parentRow.materialData.id !== undefined) {
+                                            var materialId = parentRow.materialData.id
+                                            var rowIndex = parentRow.rowIndex !== undefined ? parentRow.rowIndex : index
+                                            console.log("Deleting material with ID:", materialId, "at row:", rowIndex)
+                                            root.deleteMaterial(rowIndex, materialId)
+                                        } else {
+                                            console.log("Cannot delete: material data not available or id is undefined")
+                                            if (parentRow) {
+                                                console.log("Available properties:", Object.keys(parentRow))
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1690,9 +1716,9 @@ Rectangle {
         }
     }
 
-    // Connections untuk mendengarkan perubahan database
+    // Connections untuk mendengarkan perubahan model
     Connections {
-        target: materialDatabase
+        target: materialModel
         function onMaterialInserted(id) {
             console.log("Material inserted with ID:", id)
             root.refreshData()
@@ -1706,7 +1732,7 @@ Rectangle {
             root.refreshData()
         }
         function onError(message) {
-            console.log("Database error:", message)
+            console.log("Model error:", message)
         }
     }
 }
