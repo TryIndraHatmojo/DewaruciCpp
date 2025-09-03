@@ -89,6 +89,118 @@ Rectangle {
         return thisType
     }
 
+    // Function untuk calculate area, e, w, dan upper_i menggunakan countingFormula
+    function calculateProfileValues(type, hw, tw, bfProfiles, tf) {
+        if (!profileController) {
+            console.log("ProfileController not available for calculation")
+            return {area: 0, e: 0, w: 0, upperI: 0}
+        }
+        
+        var thisHw = parseFloat(hw) || 0
+        var thisTw = parseFloat(tw) || 0
+        var thisBf = parseFloat(bfProfiles) || 0
+        var thisTf = parseFloat(tf) || 0
+        var thisType = type || "Bar"
+        
+        // Only skip if essential dimensions are missing
+        if (thisHw <= 0 || thisTw <= 0) {
+            console.log("Skipping calculation - essential values missing (hw or tw):", thisHw, thisTw)
+            return {area: 0, e: 0, w: 0, upperI: 0}
+        }
+        
+        // For type L, we also need bf and tf
+        if (thisType === "L" && (thisBf <= 0 || thisTf <= 0)) {
+            console.log("Skipping calculation - L profile needs bf and tf:", thisBf, thisTf)
+            return {area: 0, e: 0, w: 0, upperI: 0}
+        }
+        
+        // For other types, ensure tf has a reasonable value
+        if (thisType !== "L" && thisTf <= 0) {
+            thisTf = thisTw // Use tw as default for tf if not specified
+        }
+        
+        console.log("Calling countingFormula with:", thisHw, thisTw, thisBf, thisTf, thisType)
+        
+        try {
+            var result = profileController.countingFormula(thisHw, thisTw, thisBf, thisTf, thisType)
+            if (result && result.length >= 4) {
+                var calculatedValues = {
+                    area: result[0],
+                    e: result[1], 
+                    w: result[2],
+                    upperI: result[3]
+                }
+                console.log("Calculated values:", calculatedValues)
+                return calculatedValues
+            } else {
+                console.log("countingFormula returned invalid result:", result)
+                return {area: 0, e: 0, w: 0, upperI: 0}
+            }
+        } catch (error) {
+            console.log("Error calling countingFormula:", error.toString())
+            return {area: 0, e: 0, w: 0, upperI: 0}
+        }
+    }
+
+    // Function untuk calculate l, tb, bf, dan tbf menggunakan profileTableCountingFormulaBrackets
+    function calculateBracketValues(tw, w, rehProfiles, rehBrackets) {
+        if (!profileController) {
+            console.log("ProfileController not available for bracket calculation")
+            return {l: 0, tb: 0, bf: 0, tbf: 0}
+        }
+        
+        var thisTw = parseFloat(tw) || 0
+        var thisW = parseFloat(w) || 0
+        var thisRehProfiles = parseFloat(rehProfiles) || 235
+        var thisRehBrackets = parseFloat(rehBrackets) || 235
+        
+        // Skip calculation if essential values are missing
+        if (thisTw <= 0 || thisW <= 0) {
+            console.log("Skipping bracket calculation - essential values missing (tw or w):", thisTw, thisW)
+            return {l: 0, tb: 0, bf: 0, tbf: 0}
+        }
+        
+        console.log("Calling profileTableCountingFormulaBrackets with:", thisTw, thisW, thisRehProfiles, thisRehBrackets)
+        
+        try {
+            var result = profileController.profileTableCountingFormulaBrackets(thisTw, thisW, thisRehProfiles, thisRehBrackets)
+            if (result && result.length >= 4) {
+                var calculatedValues = {
+                    l: result[0],
+                    tb: result[1],
+                    bf: result[2],
+                    tbf: result[3]
+                }
+                console.log("Calculated bracket values:", calculatedValues)
+                return calculatedValues
+            } else {
+                console.log("profileTableCountingFormulaBrackets returned invalid result:", result)
+                return {l: 0, tb: 0, bf: 0, tbf: 0}
+            }
+        } catch (error) {
+            console.log("Error calling profileTableCountingFormulaBrackets:", error.toString())
+            return {l: 0, tb: 0, bf: 0, tbf: 0}
+        }
+    }
+
+    // Function untuk trigger bracket recalculation di semua rows
+    function triggerBracketRecalculation() {
+        console.log("triggerBracketRecalculation called")
+        
+        // Update shadow row
+        if (shadowRow && shadowRow.updateShadowRowValues) {
+            shadowRow.updateShadowRowValues()
+        }
+        
+        // Update all data rows
+        for (var i = 0; i < profileRepeater.count; i++) {
+            var row = profileRepeater.itemAt(i)
+            if (row && row.updateProfileName) {
+                row.updateProfileName()
+            }
+        }
+    }
+
     // Function untuk add profile baru dari shadow row
     function addNewProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf) {
         if (!profileController) {
@@ -222,6 +334,13 @@ Rectangle {
                     validator: DoubleValidator { bottom: 0; top: 999999 }
                     selectByMouse: true
                     font.pixelSize: 10
+                    
+                    onTextChanged: {
+                        // Trigger bracket recalculation for all rows when REH Brackets changes
+                        Qt.callLater(function() {
+                            triggerBracketRecalculation()
+                        })
+                    }
                 }
 
                 Text {
@@ -238,6 +357,13 @@ Rectangle {
                     validator: DoubleValidator { bottom: 0; top: 999999 }
                     selectByMouse: true
                     font.pixelSize: 10
+                    
+                    onTextChanged: {
+                        // Trigger bracket recalculation for all rows when REH Profiles changes
+                        Qt.callLater(function() {
+                            triggerBracketRecalculation()
+                        })
+                    }
                 }
 
                 Button {
@@ -650,6 +776,16 @@ Rectangle {
                             var twField = children[3].children[0] // tw TextInput
                             var bfField = children[4].children[0] // bf TextInput
                             var tfField = children[5].children[0] // tf TextInput
+                            var areaField = children[6].children[0] // area TextInput
+                            var eField = children[7].children[0] // e TextInput
+                            var wField = children[8].children[0] // w TextInput
+                            var upperIField = children[9].children[0] // upperI TextInput
+                            var lField = children[10].children[0] // l TextInput
+                            var tbField = children[11].children[0] // tb TextInput
+                            var bfBracketsField = children[12].children[0] // bfBrackets TextInput
+                            var tbfField = children[13].children[0] // tbf TextInput
+                            
+                            console.log("updateProfileName called for row", rowIndex)
                             
                             var newName = generateProfileName(
                                 typeField.currentText,
@@ -660,7 +796,55 @@ Rectangle {
                             )
                             
                             nameField.text = newName
-                            console.log("Row", rowIndex, "name updated to:", newName)
+                            
+                            // Calculate and update area, e, w, upperI using countingFormula
+                            var calculatedValues = calculateProfileValues(
+                                typeField.currentText,
+                                hwField.text,
+                                twField.text,
+                                bfField.text,
+                                tfField.text
+                            )
+                            
+                            console.log("Row", rowIndex, "calculated values:", calculatedValues)
+                            
+                            // Always update calculated values (even if 0)
+                            areaField.text = calculatedValues.area.toFixed(2)
+                            profileData.area = calculatedValues.area
+                            
+                            eField.text = calculatedValues.e.toFixed(2)
+                            profileData.e = calculatedValues.e
+                            
+                            wField.text = calculatedValues.w.toFixed(2)
+                            profileData.w = calculatedValues.w
+                            
+                            upperIField.text = calculatedValues.upperI.toFixed(2)
+                            profileData.upperI = calculatedValues.upperI
+                            
+                            // Calculate and update bracket values using profileTableCountingFormulaBrackets
+                            var bracketValues = calculateBracketValues(
+                                twField.text,
+                                wField.text,
+                                rehProfilesInput.text,
+                                rehBracketsInput.text
+                            )
+                            
+                            console.log("Row", rowIndex, "calculated bracket values:", bracketValues)
+                            
+                            // Always update bracket calculated values (even if 0)
+                            lField.text = bracketValues.l.toFixed(2)
+                            profileData.lowerL = bracketValues.l
+                            
+                            tbField.text = bracketValues.tb.toFixed(2)
+                            profileData.tb = bracketValues.tb
+                            
+                            bfBracketsField.text = bracketValues.bf.toFixed(2)
+                            profileData.bfBrackets = bracketValues.bf
+                            
+                            tbfField.text = bracketValues.tbf.toFixed(2)
+                            profileData.tbf = bracketValues.tbf
+                            
+                            console.log("Row", rowIndex, "all fields updated - name:", newName, "area:", areaField.text, "e:", eField.text, "w:", wField.text, "upperI:", upperIField.text, "l:", lField.text, "tb:", tbField.text, "bf:", bfBracketsField.text, "tbf:", tbfField.text)
                         }
                         
                         function updateProfile() {
@@ -1892,6 +2076,56 @@ Rectangle {
                         shadowTbfField.text = lastProfile.tbf ? lastProfile.tbf.toString() : "0"
                     }
                     
+                    // Function untuk update shadow row values ketika type/dimension berubah
+                    function updateShadowRowValues() {
+                        console.log("updateShadowRowValues called")
+                        
+                        var newName = generateProfileName(
+                            shadowTypeField.currentText,
+                            shadowHwField.text,
+                            shadowTwField.text,
+                            shadowBfProfilesField.text,
+                            shadowTfField.text
+                        )
+                        
+                        shadowNameField.text = newName
+                        
+                        // Calculate and update area, e, w, upperI using countingFormula
+                        var calculatedValues = calculateProfileValues(
+                            shadowTypeField.currentText,
+                            shadowHwField.text,
+                            shadowTwField.text,
+                            shadowBfProfilesField.text,
+                            shadowTfField.text
+                        )
+                        
+                        console.log("Shadow calculated values:", calculatedValues)
+                        
+                        // Always update calculated values (even if 0)
+                        shadowAreaField.text = calculatedValues.area.toFixed(2)
+                        shadowEField.text = calculatedValues.e.toFixed(2)
+                        shadowWField.text = calculatedValues.w.toFixed(2)
+                        shadowUpperIField.text = calculatedValues.upperI.toFixed(2)
+                        
+                        // Calculate and update bracket values using profileTableCountingFormulaBrackets
+                        var bracketValues = calculateBracketValues(
+                            shadowTwField.text,
+                            shadowWField.text,
+                            rehProfilesInput.text,
+                            rehBracketsInput.text
+                        )
+                        
+                        console.log("Shadow calculated bracket values:", bracketValues)
+                        
+                        // Always update bracket calculated values (even if 0)
+                        shadowLowerLField.text = bracketValues.l.toFixed(2)
+                        shadowTbField.text = bracketValues.tb.toFixed(2)
+                        shadowBfBracketsField.text = bracketValues.bf.toFixed(2)
+                        shadowTbfField.text = bracketValues.tbf.toFixed(2)
+                        
+                        console.log("Shadow row updated - name:", newName, "area:", shadowAreaField.text, "e:", shadowEField.text, "w:", shadowWField.text, "upperI:", shadowUpperIField.text, "l:", shadowLowerLField.text, "tb:", shadowTbField.text, "bf:", shadowBfBracketsField.text, "tbf:", shadowTbfField.text)
+                    }
+                    
                     Component.onCompleted: {
                         // Initialize shadow row dengan data terakhir setelah data load
                         root.resetShadowRow()
@@ -1919,26 +2153,10 @@ Rectangle {
                             onCurrentTextChanged: {
                                 console.log("Shadow type changed to:", currentText)
                                 
-                                // Get current values
-                                var hwValue = shadowHwField.text
-                                var twValue = shadowTwField.text  
-                                var bfValue = shadowBfProfilesField.text
-                                var tfValue = shadowTfField.text
-                                
-                                console.log("Shadow values - hw:", hwValue, "tw:", twValue, "bf:", bfValue, "tf:", tfValue)
-                                
-                                // Auto-generate name when type changes
-                                var newName = generateProfileName(
-                                    currentText,
-                                    hwValue,
-                                    twValue,
-                                    bfValue,
-                                    tfValue
-                                )
-                                
-                                console.log("Shadow generated name:", newName)
-                                shadowNameField.text = newName
-                                console.log("Shadow name field updated to:", shadowNameField.text)
+                                // Update name and calculated values automatically
+                                Qt.callLater(function() {
+                                    updateShadowRowValues()
+                                })
                             }
                         }
                     }
@@ -2070,15 +2288,10 @@ Rectangle {
                             }
                             
                             onTextChanged: {
-                                // Auto-update name when hw value changes
-                                var newName = generateProfileName(
-                                    shadowTypeField.currentText,
-                                    text,
-                                    shadowTwField.text,
-                                    shadowBfProfilesField.text,
-                                    shadowTfField.text
-                                )
-                                shadowNameField.text = newName
+                                // Update name and calculated values when hw changes
+                                Qt.callLater(function() {
+                                    updateShadowRowValues()
+                                })
                             }
                         }
                     }
@@ -2146,15 +2359,10 @@ Rectangle {
                             }
                             
                             onTextChanged: {
-                                // Auto-update name when tw value changes
-                                var newName = generateProfileName(
-                                    shadowTypeField.currentText,
-                                    shadowHwField.text,
-                                    text,
-                                    shadowBfProfilesField.text,
-                                    shadowTfField.text
-                                )
-                                shadowNameField.text = newName
+                                // Update name and calculated values when tw changes
+                                Qt.callLater(function() {
+                                    updateShadowRowValues()
+                                })
                             }
                         }
                     }
@@ -2222,15 +2430,10 @@ Rectangle {
                             }
                             
                             onTextChanged: {
-                                // Auto-update name when bf value changes
-                                var newName = generateProfileName(
-                                    shadowTypeField.currentText,
-                                    shadowHwField.text,
-                                    shadowTwField.text,
-                                    text,
-                                    shadowTfField.text
-                                )
-                                shadowNameField.text = newName
+                                // Update name and calculated values when bf changes
+                                Qt.callLater(function() {
+                                    updateShadowRowValues()
+                                })
                             }
                         }
                     }
@@ -2298,15 +2501,10 @@ Rectangle {
                             }
                             
                             onTextChanged: {
-                                // Auto-update name when tf value changes
-                                var newName = generateProfileName(
-                                    shadowTypeField.currentText,
-                                    shadowHwField.text,
-                                    shadowTwField.text,
-                                    shadowBfProfilesField.text,
-                                    text
-                                )
-                                shadowNameField.text = newName
+                                // Update name and calculated values when tf changes
+                                Qt.callLater(function() {
+                                    updateShadowRowValues()
+                                })
                             }
                         }
                     }

@@ -502,7 +502,7 @@ bool StructureProfileTableController::isValidProfileData(const QString& type, co
 }
 
 // Calculation functions
-QVariantList StructureProfileTableController::countingFormula(double hw, double tw, double bf, double tf, const QString& name)
+QVariantList StructureProfileTableController::countingFormula(double hw, double tw, double bf, double tf, const QString& type)
 {
     double hw_cm = hw / 10.0;
     double tw_cm = tw / 10.0;
@@ -564,7 +564,7 @@ QVariantList StructureProfileTableController::countingFormula(double hw, double 
 
     // Count moduli actual
     double moduli_actual;
-    if (name == "HP") {
+    if (type == "HP") {
         moduli_actual = 2.1445 * std::min(inertia_section / z12, inertia_section / z2);
     } else {
         moduli_actual = std::min(inertia_section / z12, inertia_section / z2);
@@ -572,11 +572,11 @@ QVariantList StructureProfileTableController::countingFormula(double hw, double 
 
     // Count moduli ksp
     double moduli_ksp;
-    if (name == "Bar" || name == "T" || name == "FB") {
+    if (type == "Bar" || type == "T" || type == "FB") {
         moduli_ksp = moduli_actual / 1.0;
-    } else if (name == "HP") {
+    } else if (type == "HP") {
         moduli_ksp = moduli_actual / 1.03;
-    } else if (name == "L") {
+    } else if (type == "L") {
         moduli_ksp = moduli_actual / 1.15;
     } else {
         moduli_ksp = 0.0;
@@ -594,7 +594,7 @@ QVariantList StructureProfileTableController::countingFormula(double hw, double 
 
 QVariantList StructureProfileTableController::countingFormulaEdit(double hw, double tw, double bf, double tf, 
                                                                  double area, double e, double w, double upperI, 
-                                                                 const QString& name)
+                                                                 const QString& type)
 {
     double hw_cm = hw / 10.0;
     double tw_cm = tw / 10.0;
@@ -671,7 +671,7 @@ QVariantList StructureProfileTableController::countingFormulaEdit(double hw, dou
 
     // Count moduli actual
     double moduli_actual;
-    if (name == "HP") {
+    if (type == "HP") {
         moduli_actual = 2.1445 * std::min(inertia_section / z12, inertia_section / z2);
     } else {
         moduli_actual = std::min(inertia_section / z12, inertia_section / z2);
@@ -679,11 +679,11 @@ QVariantList StructureProfileTableController::countingFormulaEdit(double hw, dou
 
     // Count moduli ksp
     double moduli_ksp;
-    if (name == "Bar" || name == "T" || name == "FB") {
+    if (type == "Bar" || type == "T" || type == "FB") {
         moduli_ksp = moduli_actual / 1.0;
-    } else if (name == "HP") {
+    } else if (type == "HP") {
         moduli_ksp = moduli_actual / 1.03;
-    } else if (name == "L") {
+    } else if (type == "L") {
         moduli_ksp = moduli_actual / 1.15;
     } else {
         moduli_ksp = 0.0;
@@ -707,18 +707,26 @@ QVariantList StructureProfileTableController::countingFormulaEdit(double hw, dou
 // Bracket calculation functions
 QVariantList StructureProfileTableController::profileTableCountingFormulaBrackets(double tw, double W, double rehProfile, double rehBracket)
 {
+    // Convert inputs to double to match Python behavior
+    double Reh_profile = static_cast<double>(rehProfile);
+    double Reh_bracket = static_cast<double>(rehBracket);
+    double W_val = static_cast<double>(W);
+    double tw_val = static_cast<double>(tw);
+    
     // Coefficients
-    double k1 = 235.0 / rehProfile;
-    double k2 = 235.0 / rehBracket;
+    double k1 = 235.0 / Reh_profile;
+    double k2 = 235.0 / Reh_bracket;
     double c = 1.2;
     double ct = 1.0;
     
-    double tmax = tw;
+    double tmax = tw_val;
     double bmin = 50.0;
     double bmax = 90.0;
 
     // t bracket, tb=tbf
-    double tnet = c * pow(W / k1, 1.0/3.0);
+    double tnet = c * pow(W_val / (double)k1, 1.0/3.0);
+    
+    // tk = Piecewise((1.5,tnet<10),((Min(3,0.1*tnet/sqrt(k1))),True))
     double tk;
     if (tnet < 10.0) {
         tk = 1.5;
@@ -730,7 +738,7 @@ QVariantList StructureProfileTableController::profileTableCountingFormulaBracket
     double a = tnet + tk;
     double tfull = ceil(a * 10.0) / 10.0;
 
-    // Output t yang diambil (using piecewise logic)
+    // Output t yang diambil - t = Piecewise((tmin, tfull < tmin), (tmax, tfull > tmax), (tfull, True))
     double t;
     if (tfull < tmin) {
         t = tmin;
@@ -744,15 +752,15 @@ QVariantList StructureProfileTableController::profileTableCountingFormulaBracket
     double tbf = t;
 
     // l bracket
-    double lreq = 46.2 * pow(W / k1, 1.0/3.0) * sqrt(k2) * ct;
+    double lreq = 46.2 * pow(W_val / (double)k1, 1.0/3.0) * sqrt(k2) * ct;
 
-    // Output l bracket yang diambil
+    // Output l bracket yang diambil - l = ceiling(lreq)
     double l = ceil(lreq);
 
     // bf bracket
-    double breq = 40.0 + W / 30.0;
+    double breq = 40.0 + W_val / 30.0;
 
-    // Output bf yang diambil (using piecewise logic)
+    // Output bf yang diambil - bf = Piecewise((bmin,breq<bmin),(bmax,breq>bmax),(breq,True))
     double bf;
     if (breq < bmin) {
         bf = bmin;
@@ -762,28 +770,42 @@ QVariantList StructureProfileTableController::profileTableCountingFormulaBracket
         bf = breq;
     }
     
-    qDebug() << "profile_table_counting_formula_brackets" << l << tb << bf << tbf;
+    // Convert to float to match Python behavior
+    double l_result = static_cast<double>(l);
+    double tb_result = static_cast<double>(tb);
+    double bf_result = static_cast<double>(bf);
+    double tbf_result = static_cast<double>(tbf);
+    
+    qDebug() << "profile_table_counting_formula_brackets" << l_result << tb_result << bf_result << tbf_result;
     
     QVariantList result;
-    result << l << tb << bf << tbf;
+    result << l_result << tb_result << bf_result << tbf_result;
     return result;
 }
 
 QVariantList StructureProfileTableController::profileTableCountingFormulaBracketsEdit(double tw, double W, double rehProfile, double rehBracket,
                                                                                      double l, double tb, double bf, double tbf)
 {
+    // Convert inputs to double to match Python behavior
+    double Reh_profile = static_cast<double>(rehProfile);
+    double Reh_bracket = static_cast<double>(rehBracket);
+    double W_val = static_cast<double>(W);
+    double tw_val = static_cast<double>(tw);
+    
     // Coefficients
-    double k1 = 235.0 / rehProfile;
-    double k2 = 235.0 / rehBracket;
+    double k1 = 235.0 / Reh_profile;
+    double k2 = 235.0 / Reh_bracket;
     double c = 1.2;
     double ct = 1.0;
     
-    double tmax = tw;
+    double tmax = tw_val;
     double bmin = 50.0;
     double bmax = 90.0;
 
     // t bracket, tb=tbf
-    double tnet = c * pow(W / k1, 1.0/3.0);
+    double tnet = c * pow(W_val / k1, 1.0/3.0);
+    
+    // tk = Piecewise((1.5,tnet<10),((Min(3,0.1*tnet/sqrt(k1))),True))
     double tk;
     if (tnet < 10.0) {
         tk = 1.5;
@@ -795,7 +817,7 @@ QVariantList StructureProfileTableController::profileTableCountingFormulaBracket
     double a = tnet + tk;
     double tfull = ceil(a * 10.0) / 10.0;
 
-    // Output t yang diambil (using piecewise logic)
+    // Output t yang diambil - t = Piecewise((tmin, tfull < tmin), (tmax, tfull > tmax), (tfull, True))
     double t;
     if (tfull < tmin) {
         t = tmin;
@@ -822,9 +844,9 @@ QVariantList StructureProfileTableController::profileTableCountingFormulaBracket
     }
 
     // l bracket
-    double lreq = 46.2 * pow(W / k1, 1.0/3.0) * sqrt(k2) * ct;
+    double lreq = 46.2 * pow(W_val / k1, 1.0/3.0) * sqrt(k2) * ct;
 
-    // Output l bracket yang diambil
+    // Output l bracket yang diambil - l = ceiling(lreq)
     double final_l;
     if (l == 0.0) {
         final_l = ceil(lreq);
@@ -833,9 +855,9 @@ QVariantList StructureProfileTableController::profileTableCountingFormulaBracket
     }
 
     // bf bracket
-    double breq = 40.0 + W / 30.0;
+    double breq = 40.0 + W_val / 30.0;
 
-    // Output bf yang diambil (using piecewise logic)
+    // Output bf yang diambil - bf = Piecewise((bmin,breq<bmin),(bmax,breq>bmax),(breq,True))
     double final_bf;
     if (bf == 0.0) {
         if (breq < bmin) {
