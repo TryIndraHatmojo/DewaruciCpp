@@ -10,12 +10,16 @@ StructureProfileTable::StructureProfileTable(QObject *parent)
 
 bool StructureProfileTable::createTable()
 {
+    qDebug() << "StructureProfileTable::createTable() called";
+    
     if (!DatabaseConnection::instance().isConnected()) {
         m_lastError = "Database is not connected";
         qCritical() << "StructureProfileTable::createTable() -" << m_lastError;
         return false;
     }
-
+    
+    qDebug() << "StructureProfileTable::createTable() - Database is connected";
+    
     QSqlQuery query(DatabaseConnection::instance().database());
     
     QString createTableSql = R"(
@@ -40,19 +44,25 @@ bool StructureProfileTable::createTable()
         )
     )";
     
+    qDebug() << "StructureProfileTable::createTable() - Executing CREATE TABLE query";
+    
     if (!query.exec(createTableSql)) {
         m_lastError = QString("Failed to create table: %1").arg(query.lastError().text());
         qCritical() << "StructureProfileTable::createTable() -" << m_lastError;
         return false;
     }
     
+    qDebug() << "StructureProfileTable::createTable() - Table created successfully";
+    
     // Create index for faster lookups
     QString createIndexSql = "CREATE INDEX IF NOT EXISTS idx_profile_name ON structure_seagoing_ship_section0_profile_table(name)";
     if (!query.exec(createIndexSql)) {
         qWarning() << "StructureProfileTable::createTable() - Failed to create index:" << query.lastError().text();
+    } else {
+        qDebug() << "StructureProfileTable::createTable() - Index created successfully";
     }
     
-    qDebug() << "StructureProfileTable::createTable() - Table created successfully";
+    qDebug() << "StructureProfileTable::createTable() - Table creation completed";
     return true;
 }
 
@@ -239,6 +249,8 @@ ProfileData StructureProfileTable::findProfileByName(const QString& name)
 
 QList<ProfileData> StructureProfileTable::getAllProfiles()
 {
+    qDebug() << "StructureProfileTable::getAllProfiles() called";
+    
     QList<ProfileData> profiles;
     
     if (!DatabaseConnection::instance().isConnected()) {
@@ -247,14 +259,20 @@ QList<ProfileData> StructureProfileTable::getAllProfiles()
         return profiles;
     }
     
+    qDebug() << "StructureProfileTable::getAllProfiles() - Database is connected";
+    
     QSqlQuery query(DatabaseConnection::instance().database());
-    QString sql = "SELECT * FROM structure_seagoing_ship_section0_profile_table ORDER BY name";
+    QString sql = "SELECT * FROM structure_seagoing_ship_section0_profile_table ORDER BY id";
+    
+    qDebug() << "StructureProfileTable::getAllProfiles() - Executing query:" << sql;
     
     if (!query.exec(sql)) {
         m_lastError = QString("Failed to fetch profiles: %1").arg(query.lastError().text());
         qCritical() << "StructureProfileTable::getAllProfiles() -" << m_lastError;
         return profiles;
     }
+    
+    qDebug() << "StructureProfileTable::getAllProfiles() - Query executed successfully";
     
     while (query.next()) {
         ProfileData profile = createProfileFromQuery(query);
@@ -314,8 +332,12 @@ bool StructureProfileTable::insertSampleData()
 // QML accessible functions
 QVariantList StructureProfileTable::getAllProfilesForQML()
 {
+    qDebug() << "StructureProfileTable::getAllProfilesForQML() called";
+    
     QVariantList result;
     QList<ProfileData> profiles = getAllProfiles();
+    
+    qDebug() << "StructureProfileTable::getAllProfilesForQML() - Got profiles from database, count:" << profiles.size();
     
     for (const ProfileData& profile : profiles) {
         QVariantMap profileMap;
@@ -340,6 +362,7 @@ QVariantList StructureProfileTable::getAllProfilesForQML()
         result.append(profileMap);
     }
     
+    qDebug() << "StructureProfileTable::getAllProfilesForQML() - Returning result, count:" << result.size();
     return result;
 }
 

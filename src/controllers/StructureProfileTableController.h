@@ -10,6 +10,7 @@ class StructureProfileTableController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
+    Q_PROPERTY(QVariantList profilesData READ getProfilesData NOTIFY profilesDataChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool isLoading READ isLoading NOTIFY isLoadingChanged)
 
@@ -18,6 +19,7 @@ public:
     
     // Properties
     QVariantList profiles() const;
+    QVariantList getProfilesData() const;
     QString lastError() const;
     bool isLoading() const;
     
@@ -58,12 +60,35 @@ public:
     Q_INVOKABLE int getProfileCount();
     Q_INVOKABLE bool profileExists(const QString& name);
     Q_INVOKABLE QStringList getAvailableTypes();
+    
+    // Calculation functions
+    Q_INVOKABLE QVariantList countingFormula(double hw, double tw, double bf, double tf, const QString& name);
+    Q_INVOKABLE QVariantList countingFormulaEdit(double hw, double tw, double bf, double tf, 
+                                                 double area, double e, double w, double upperI, 
+                                                 const QString& name);
+    
+    // Bracket calculation functions
+    Q_INVOKABLE QVariantList profileTableCountingFormulaBrackets(double tw, double W, double rehProfile, double rehBracket);
+    Q_INVOKABLE QVariantList profileTableCountingFormulaBracketsEdit(double tw, double W, double rehProfile, double rehBracket,
+                                                                     double l, double tb, double bf, double tbf);
+    
+    // Data management functions (similar to LinearIsotropicMaterials)
+    Q_INVOKABLE QVariantList getAllProfilesData();
+    Q_INVOKABLE bool addNewProfile(const QString& type, const QString& name, double hw, double tw, 
+                                  double bfProfiles, double tf, double area, double e, double w, 
+                                  double upperI, double lowerL, double tb, double bfBrackets, double tbf);
+    Q_INVOKABLE bool updateProfileData(int id, const QString& type, const QString& name, double hw, double tw,
+                                      double bfProfiles, double tf, double area, double e, double w,
+                                      double upperI, double lowerL, double tb, double bfBrackets, double tbf);
+    Q_INVOKABLE bool removeProfileData(int id);
+    Q_INVOKABLE QString getLastError() const;
 
 public slots:
     void initialize();
 
 signals:
     void profilesChanged();
+    void profilesDataChanged();
     void lastErrorChanged();
     void isLoadingChanged();
     void profileCreated(int id);

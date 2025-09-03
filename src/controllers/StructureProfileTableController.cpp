@@ -1,6 +1,8 @@
 #include "StructureProfileTableController.h"
 #include <QDebug>
 #include <QRegularExpression>
+#include <cmath>
+#include <algorithm>
 
 StructureProfileTableController::StructureProfileTableController(QObject *parent)
     : QObject(parent)
@@ -338,16 +340,23 @@ QStringList StructureProfileTableController::getAvailableTypes()
 // Public slots
 void StructureProfileTableController::initialize()
 {
+    qDebug() << "StructureProfileTableController::initialize() called";
+    
     setIsLoading(true);
     
     // Create table if it doesn't exist
+    qDebug() << "StructureProfileTableController::initialize() - Creating table";
     if (!m_model->createTable()) {
+        qDebug() << "StructureProfileTableController::initialize() - Failed to create table:" << m_model->getLastError();
         setLastError(m_model->getLastError());
         setIsLoading(false);
         return;
     }
     
+    qDebug() << "StructureProfileTableController::initialize() - Table created successfully";
+    
     // Load initial data
+    qDebug() << "StructureProfileTableController::initialize() - Loading initial data";
     loadProfilesFromModel();
     setIsLoading(false);
     
@@ -401,11 +410,19 @@ void StructureProfileTableController::setIsLoading(bool loading)
 
 void StructureProfileTableController::loadProfilesFromModel()
 {
+    qDebug() << "StructureProfileTableController::loadProfilesFromModel() called";
+    
     QVariantList newProfiles = m_model->getAllProfilesForQML();
     
+    qDebug() << "StructureProfileTableController::loadProfilesFromModel() - Got profiles from model, count:" << newProfiles.size();
+    
     if (m_profiles != newProfiles) {
+        qDebug() << "StructureProfileTableController::loadProfilesFromModel() - Profiles changed, updating";
         m_profiles = newProfiles;
         emit profilesChanged();
+        emit profilesDataChanged();
+    } else {
+        qDebug() << "StructureProfileTableController::loadProfilesFromModel() - Profiles unchanged";
     }
 }
 
@@ -492,4 +509,408 @@ bool StructureProfileTableController::isValidProfileData(const QString& type, co
     }
     
     return true;
+}
+
+// Calculation functions
+QVariantList StructureProfileTableController::countingFormula(double hw, double tw, double bf, double tf, const QString& name)
+{
+    double hw_cm = hw / 10.0;
+    double tw_cm = tw / 10.0;
+    double bf_cm = bf / 10.0;
+    double tf_cm = tf / 10.0;
+    double attch_plate_cm = tw / 10.0;
+    double AttchX = 40.0 * attch_plate_cm;
+
+    // Count area
+    double FaceX = bf_cm;
+    double WebX = tw_cm;
+    
+    double FaceY = tf_cm;
+    double WebY = hw_cm - tf_cm;
+    
+    double AttchY = tw / 10.0;
+    double FaceZ = (0.5 * FaceY) + WebY;
+    double WebZ = 0.5 * WebY;
+    double FaceZ2 = (0.5 * FaceY) + WebY + AttchY;
+    double WebZ2 = 0.5 * WebY + AttchY;
+    
+    double AttchZ = 0.5 * AttchY;
+    double FaceA = FaceX * FaceY;
+    double FaceAZ = FaceA * FaceZ;
+    double FaceAZ2 = FaceA * FaceZ2;
+    double FaceAzZ = FaceAZ2 * FaceZ2;
+    double FaceI = (FaceX * pow(FaceY, 3.0)) / 12.0;
+    
+    double WebA = WebX * WebY;
+    double WebAZ = WebA * WebZ;
+    double WebAZ2 = WebA * WebZ2;
+    double WebAzZ = WebAZ2 * WebZ2;
+    
+    double WebI = (WebX * pow(WebY, 3.0)) / 12.0;
+    double AttchA = AttchX * AttchY;
+    double AttchAZ = AttchA * AttchZ;
+    double AttchAzZ = AttchAZ * AttchZ;
+    double AttchI = (AttchX * pow(AttchY, 3.0)) / 12.0;
+
+    // Final area
+    double area = FaceA + WebA;
+
+    // Count e
+    double z1 = 10.0 * (FaceAZ + WebAZ) / (FaceA + WebA);
+
+    // Final e
+    double e = z1;
+
+    // Count upper_i
+    double z12 = (FaceAZ2 + WebAZ2 + AttchAZ) / (FaceA + WebA + AttchA);
+    double z2 = hw_cm + attch_plate_cm - z12;
+    double sigmaAzz = FaceAzZ + WebAzZ + AttchAzZ;
+    double sigmaUpperI = FaceI + WebI + AttchI;
+    double sigmaA = FaceA + WebA + AttchA;
+    double inertia_section = (sigmaAzz + sigmaUpperI) - (sigmaA * pow(z12, 2.0));
+
+    // Final upper_i
+    double upper_i = inertia_section;
+
+    // Count moduli actual
+    double moduli_actual;
+    if (name == "HP") {
+        moduli_actual = 2.1445 * std::min(inertia_section / z12, inertia_section / z2);
+    } else {
+        moduli_actual = std::min(inertia_section / z12, inertia_section / z2);
+    }
+
+    // Count moduli ksp
+    double moduli_ksp;
+    if (name == "Bar" || name == "T" || name == "FB") {
+        moduli_ksp = moduli_actual / 1.0;
+    } else if (name == "HP") {
+        moduli_ksp = moduli_actual / 1.03;
+    } else if (name == "L") {
+        moduli_ksp = moduli_actual / 1.15;
+    } else {
+        moduli_ksp = 0.0;
+    }
+
+    // Final w
+    double w = moduli_ksp;
+    
+    qDebug() << "counting_formula" << area << e << w << upper_i;
+    
+    QVariantList result;
+    result << area << e << w << upper_i;
+    return result;
+}
+
+QVariantList StructureProfileTableController::countingFormulaEdit(double hw, double tw, double bf, double tf, 
+                                                                 double area, double e, double w, double upperI, 
+                                                                 const QString& name)
+{
+    double hw_cm = hw / 10.0;
+    double tw_cm = tw / 10.0;
+    double bf_cm = bf / 10.0;
+    double tf_cm = tf / 10.0;
+    double attch_plate_cm = tw / 10.0;
+    double AttchX = 40.0 * attch_plate_cm;
+    
+    // Count area
+    double FaceX = bf_cm;
+    double WebX = tw_cm;
+    
+    double FaceY = tf_cm;
+    double WebY = hw_cm - tf_cm;
+    
+    double AttchY = tw / 10.0;
+    double FaceZ = (0.5 * FaceY) + WebY;
+    double WebZ = 0.5 * WebY;
+    double FaceZ2 = (0.5 * FaceY) + WebY + AttchY;
+    double WebZ2 = 0.5 * WebY + AttchY;
+    
+    double AttchZ = 0.5 * AttchY;
+    double FaceA = FaceX * FaceY;
+    double FaceAZ = FaceA * FaceZ;
+    double FaceAZ2 = FaceA * FaceZ2;
+    double FaceAzZ = FaceAZ2 * FaceZ2;
+    double FaceI = (FaceX * pow(FaceY, 3.0)) / 12.0;
+    
+    double WebA = WebX * WebY;
+    double WebAZ = WebA * WebZ;
+    double WebAZ2 = WebA * WebZ2;
+    double WebAzZ = WebAZ2 * WebZ2;
+    
+    double WebI = (WebX * pow(WebY, 3.0)) / 12.0;
+    double AttchA = AttchX * AttchY;
+    double AttchAZ = AttchA * AttchZ;
+    double AttchAzZ = AttchAZ * AttchZ;
+    double AttchI = (AttchX * pow(AttchY, 3.0)) / 12.0;
+
+    // Use existing area or calculate new one
+    double final_area;
+    if (area == 0.0) {
+        final_area = FaceA + WebA;
+    } else {
+        final_area = area;
+    }
+
+    // Count e
+    double z1 = 10.0 * (FaceAZ + WebAZ) / (FaceA + WebA);
+
+    // Use existing e or calculate new one
+    double final_e;
+    if (e == 0.0) {
+        final_e = z1;
+    } else {
+        final_e = e;
+    }
+
+    // Count upper_i
+    double z12 = (FaceAZ2 + WebAZ2 + AttchAZ) / (FaceA + WebA + AttchA);
+    double z2 = hw_cm + attch_plate_cm - z12;
+    double sigmaAzz = FaceAzZ + WebAzZ + AttchAzZ;
+    double sigmaUpperI = FaceI + WebI + AttchI;
+    double sigmaA = FaceA + WebA + AttchA;
+    double inertia_section = (sigmaAzz + sigmaUpperI) - (sigmaA * pow(z12, 2.0));
+
+    // Use existing upper_i or calculate new one
+    double final_upperI;
+    if (upperI == 0.0) {
+        final_upperI = inertia_section;
+    } else {
+        final_upperI = upperI;
+    }
+
+    // Count moduli actual
+    double moduli_actual;
+    if (name == "HP") {
+        moduli_actual = 2.1445 * std::min(inertia_section / z12, inertia_section / z2);
+    } else {
+        moduli_actual = std::min(inertia_section / z12, inertia_section / z2);
+    }
+
+    // Count moduli ksp
+    double moduli_ksp;
+    if (name == "Bar" || name == "T" || name == "FB") {
+        moduli_ksp = moduli_actual / 1.0;
+    } else if (name == "HP") {
+        moduli_ksp = moduli_actual / 1.03;
+    } else if (name == "L") {
+        moduli_ksp = moduli_actual / 1.15;
+    } else {
+        moduli_ksp = 0.0;
+    }
+
+    // Use existing w or calculate new one
+    double final_w;
+    if (w == 0.0) {
+        final_w = moduli_ksp;
+    } else {
+        final_w = w;
+    }
+    
+    qDebug() << "counting_formula_edit" << final_area << final_e << final_w << final_upperI;
+    
+    QVariantList result;
+    result << final_area << final_e << final_w << final_upperI;
+    return result;
+}
+
+// Bracket calculation functions
+QVariantList StructureProfileTableController::profileTableCountingFormulaBrackets(double tw, double W, double rehProfile, double rehBracket)
+{
+    // Coefficients
+    double k1 = 235.0 / rehProfile;
+    double k2 = 235.0 / rehBracket;
+    double c = 1.2;
+    double ct = 1.0;
+    
+    double tmax = tw;
+    double bmin = 50.0;
+    double bmax = 90.0;
+
+    // t bracket, tb=tbf
+    double tnet = c * pow(W / k1, 1.0/3.0);
+    double tk;
+    if (tnet < 10.0) {
+        tk = 1.5;
+    } else {
+        tk = std::min(3.0, 0.1 * tnet / sqrt(k1));
+    }
+    
+    double tmin = 5.0 + tk;
+    double a = tnet + tk;
+    double tfull = ceil(a * 10.0) / 10.0;
+
+    // Output t yang diambil (using piecewise logic)
+    double t;
+    if (tfull < tmin) {
+        t = tmin;
+    } else if (tfull > tmax) {
+        t = tmax;
+    } else {
+        t = tfull;
+    }
+    
+    double tb = t;
+    double tbf = t;
+
+    // l bracket
+    double lreq = 46.2 * pow(W / k1, 1.0/3.0) * sqrt(k2) * ct;
+
+    // Output l bracket yang diambil
+    double l = ceil(lreq);
+
+    // bf bracket
+    double breq = 40.0 + W / 30.0;
+
+    // Output bf yang diambil (using piecewise logic)
+    double bf;
+    if (breq < bmin) {
+        bf = bmin;
+    } else if (breq > bmax) {
+        bf = bmax;
+    } else {
+        bf = breq;
+    }
+    
+    qDebug() << "profile_table_counting_formula_brackets" << l << tb << bf << tbf;
+    
+    QVariantList result;
+    result << l << tb << bf << tbf;
+    return result;
+}
+
+QVariantList StructureProfileTableController::profileTableCountingFormulaBracketsEdit(double tw, double W, double rehProfile, double rehBracket,
+                                                                                     double l, double tb, double bf, double tbf)
+{
+    // Coefficients
+    double k1 = 235.0 / rehProfile;
+    double k2 = 235.0 / rehBracket;
+    double c = 1.2;
+    double ct = 1.0;
+    
+    double tmax = tw;
+    double bmin = 50.0;
+    double bmax = 90.0;
+
+    // t bracket, tb=tbf
+    double tnet = c * pow(W / k1, 1.0/3.0);
+    double tk;
+    if (tnet < 10.0) {
+        tk = 1.5;
+    } else {
+        tk = std::min(3.0, 0.1 * tnet / sqrt(k1));
+    }
+    
+    double tmin = 5.0 + tk;
+    double a = tnet + tk;
+    double tfull = ceil(a * 10.0) / 10.0;
+
+    // Output t yang diambil (using piecewise logic)
+    double t;
+    if (tfull < tmin) {
+        t = tmin;
+    } else if (tfull > tmax) {
+        t = tmax;
+    } else {
+        t = tfull;
+    }
+    
+    // Use existing tb or calculated value
+    double final_tb;
+    if (tb == 0.0) {
+        final_tb = t;
+    } else {
+        final_tb = tb;
+    }
+    
+    // Use existing tbf or calculated value
+    double final_tbf;
+    if (tbf == 0.0) {
+        final_tbf = t;
+    } else {
+        final_tbf = tbf;
+    }
+
+    // l bracket
+    double lreq = 46.2 * pow(W / k1, 1.0/3.0) * sqrt(k2) * ct;
+
+    // Output l bracket yang diambil
+    double final_l;
+    if (l == 0.0) {
+        final_l = ceil(lreq);
+    } else {
+        final_l = l;
+    }
+
+    // bf bracket
+    double breq = 40.0 + W / 30.0;
+
+    // Output bf yang diambil (using piecewise logic)
+    double final_bf;
+    if (bf == 0.0) {
+        if (breq < bmin) {
+            final_bf = bmin;
+        } else if (breq > bmax) {
+            final_bf = bmax;
+        } else {
+            final_bf = breq;
+        }
+    } else {
+        final_bf = bf;
+    }
+    
+    qDebug() << "profile_table_counting_formula_brackets_edit" << final_l << final_tb << final_bf << final_tbf;
+    
+    QVariantList result;
+    result << final_l << final_tb << final_bf << final_tbf;
+    return result;
+}
+
+// Data management functions implementation
+QVariantList StructureProfileTableController::getProfilesData() const
+{
+    return m_profiles;
+}
+
+QVariantList StructureProfileTableController::getAllProfilesData()
+{
+    qDebug() << "StructureProfileTableController::getAllProfilesData() called";
+    
+    if (!m_model) {
+        qDebug() << "StructureProfileTableController::getAllProfilesData() - Model not initialized";
+        setLastError("Model not initialized");
+        return QVariantList();
+    }
+
+    qDebug() << "StructureProfileTableController::getAllProfilesData() - Model is available, calling loadProfilesFromModel";
+    
+    // Use the existing method that properly updates the internal state
+    loadProfilesFromModel();
+    
+    qDebug() << "StructureProfileTableController::getAllProfilesData() - Returning profiles, count:" << m_profiles.size();
+    return m_profiles;
+}
+
+bool StructureProfileTableController::addNewProfile(const QString& type, const QString& name, double hw, double tw, 
+                                                   double bfProfiles, double tf, double area, double e, double w, 
+                                                   double upperI, double lowerL, double tb, double bfBrackets, double tbf)
+{
+    return createProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf);
+}
+
+bool StructureProfileTableController::updateProfileData(int id, const QString& type, const QString& name, double hw, double tw,
+                                                       double bfProfiles, double tf, double area, double e, double w,
+                                                       double upperI, double lowerL, double tb, double bfBrackets, double tbf)
+{
+    return updateProfile(id, type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf);
+}
+
+bool StructureProfileTableController::removeProfileData(int id)
+{
+    return deleteProfile(id);
+}
+
+QString StructureProfileTableController::getLastError() const
+{
+    return lastError();
 }
