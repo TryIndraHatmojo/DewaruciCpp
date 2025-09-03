@@ -54,11 +54,11 @@ bool StructureProfileTableController::createProfile(const QString& type, const Q
     }
     
     // Check if profile with same name already exists
-    if (profileExists(name)) {
-        setLastError(QString("Profile with name '%1' already exists").arg(name));
-        setIsLoading(false);
-        return false;
-    }
+    // if (profileExists(name)) {
+    //     setLastError(QString("Profile with name '%1' already exists").arg(name));
+    //     setIsLoading(false);
+    //     return false;
+    // }
     
     bool success = m_model->addProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf);
     
@@ -96,11 +96,11 @@ bool StructureProfileTableController::updateProfile(int id, const QString& type,
     }
     
     // Check if new name conflicts with existing profile (except current one)
-    if (existing.name != name && profileExists(name)) {
-        setLastError(QString("Profile with name '%1' already exists").arg(name));
-        setIsLoading(false);
-        return false;
-    }
+    // if (existing.name != name && profileExists(name)) {
+    //     setLastError(QString("Profile with name '%1' already exists").arg(name));
+    //     setIsLoading(false);
+    //     return false;
+    // }
     
     bool success = m_model->updateProfileQML(id, type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf);
     
@@ -247,28 +247,18 @@ bool StructureProfileTableController::validateProfile(const QString& type, const
                                        double area, double e, double w, double upperI,
                                        double lowerL, double tb, double bfBrackets, double tbf)
 {
-    // Check required fields
-    if (type.trimmed().isEmpty()) {
-        setLastError("Profile type cannot be empty");
-        return false;
-    }
-    
-    if (name.trimmed().isEmpty()) {
-        setLastError("Profile name cannot be empty");
-        return false;
-    }
     
     // Validate numeric values (should be non-negative for physical properties)
-    if (!isValidProfileData(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)) {
-        return false;
-    }
+    // if (!isValidProfileData(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)) {
+    //     return false;
+    // }
     
     // Validate name format (alphanumeric and common symbols)
-    QRegularExpression nameRegex("^[A-Za-z0-9_\\-\\.\\s]+$");
-    if (!nameRegex.match(name).hasMatch()) {
-        setLastError("Profile name contains invalid characters. Only letters, numbers, spaces, hyphens, underscores, and dots are allowed");
-        return false;
-    }
+    // QRegularExpression nameRegex("^[A-Za-z0-9_\\-\\.\\s]+$");
+    // if (!nameRegex.match(name).hasMatch()) {
+    //     setLastError("Profile name contains invalid characters. Only letters, numbers, spaces, hyphens, underscores, and dots are allowed");
+    //     return false;
+    // }
     
     return true;
 }

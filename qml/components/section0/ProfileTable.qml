@@ -66,18 +66,72 @@ Rectangle {
         targetInput.selectAll()
     }
 
+    // Function untuk generate name berdasarkan type dan dimensi
+    function generateProfileName(type, hw, tw, bfProfiles, tf) {
+        var thisType = type || ""
+        var thisHw = parseFloat(hw) || 0
+        var thisTw = parseFloat(tw) || 0
+        var thisBf_profiles = parseFloat(bfProfiles) || 0
+        var thisTf = parseFloat(tf) || 0
+        
+        console.log("generateProfileName called with:", thisType, thisHw, thisTw, thisBf_profiles, thisTf)
+        
+        if (thisType == "HP" || thisType == "Bar" || thisType == "T") {
+            var result = thisType + " " + thisHw.toFixed(0) + "*" + thisTw.toFixed(1)
+            console.log("Generated name for HP/Bar/T:", result)
+            return result
+        } else if (thisType == "L") {
+            var result = thisType + " " + thisHw.toFixed(0) + "*" + thisTw.toFixed(1) + "*" + thisBf_profiles.toFixed(0) + "*" + thisTf.toFixed(1)
+            console.log("Generated name for L:", result)
+            return result
+        }
+        console.log("No match, returning type:", thisType)
+        return thisType
+    }
+
     // Function untuk add profile baru dari shadow row
     function addNewProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf) {
-        if (profileController) {
-            var success = profileController.createProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)
+        if (!profileController) {
+            console.log("Error: ProfileController not available")
+            return false
+        }
+        
+        console.log("Calling addNewProfile with parameters:", type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)
+        
+        try {
+            var success = profileController.addNewProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)
             if (success) {
                 console.log("New profile added successfully")
                 refreshData()
-                // Reset shadow row ke nilai default
-                resetShadowRow()
+                // Reset shadow row ke nilai dari data yang baru ditambahkan
+                var newProfile = {
+                    type: type,
+                    name: name,
+                    hw: hw,
+                    tw: tw,
+                    bfProfiles: bfProfiles,
+                    tf: tf,
+                    area: area,
+                    e: e,
+                    w: w,
+                    upperI: upperI,
+                    lowerL: lowerL,
+                    tb: tb,
+                    bfBrackets: bfBrackets,
+                    tbf: tbf
+                }
+                shadowRow.resetToLastData(newProfile)
+                return true
             } else {
                 console.log("Failed to add profile")
+                if (profileController.lastError) {
+                    console.log("Error details:", profileController.lastError)
+                }
+                return false
             }
+        } catch (error) {
+            console.log("Exception in addNewProfile:", error.toString())
+            return false
         }
     }
 
@@ -86,6 +140,24 @@ Rectangle {
         if (profileController && tableModel.length > 0) {
             var lastProfile = tableModel[tableModel.length - 1]
             shadowRow.resetToLastData(lastProfile)
+        } else {
+            // Set default values when no data is available
+            shadowRow.resetToLastData({
+                type: "Bar",
+                name: "Bar Test",
+                hw: "400.0",
+                tw: "26.0",
+                bfProfiles: "85.0",
+                tf: "14.7",
+                area: "104.0",
+                e: "200.0",
+                w: "1359.29",
+                upperI: "48096.0",
+                lowerL: "512",
+                tb: "14.7",
+                bfBrackets: "85",
+                tbf: "14.7"
+            })
         }
     }
 
@@ -570,6 +642,27 @@ Rectangle {
 
                         property var originalValues: ({}) // Store original values for comparison
                         
+                        // Function to update name based on current field values
+                        function updateProfileName() {
+                            var typeField = children[0].children[0] // ComboBox
+                            var nameField = children[1].children[0] // Name TextInput
+                            var hwField = children[2].children[0] // hw TextInput  
+                            var twField = children[3].children[0] // tw TextInput
+                            var bfField = children[4].children[0] // bf TextInput
+                            var tfField = children[5].children[0] // tf TextInput
+                            
+                            var newName = generateProfileName(
+                                typeField.currentText,
+                                hwField.text,
+                                twField.text,
+                                bfField.text,
+                                tfField.text
+                            )
+                            
+                            nameField.text = newName
+                            console.log("Row", rowIndex, "name updated to:", newName)
+                        }
+                        
                         function updateProfile() {
                             if (profileController && profileData.id) {
                                 // Check if any values have actually changed
@@ -651,9 +744,12 @@ Rectangle {
                                 }
                                 font.pixelSize: 9
                                 onCurrentTextChanged: {
-                                    if (profileController && profileData.id) {
-                                        console.log("Type changed to:", currentText)
-                                    }
+                                    console.log("Data row type changed to:", currentText, "for row", rowIndex)
+                                    
+                                    // Use Qt.callLater to ensure all components are ready
+                                    Qt.callLater(function() {
+                                        updateProfileName()
+                                    })
                                 }
                             }
                         }
@@ -807,6 +903,13 @@ Rectangle {
                                     profileData.hw = parseFloat(text) || 0
                                     parent.parent.updateProfile()
                                 }
+                                
+                                onTextChanged: {
+                                    // Auto-update name when hw value changes
+                                    Qt.callLater(function() {
+                                        updateProfileName()
+                                    })
+                                }
                             }
                         }
 
@@ -882,6 +985,13 @@ Rectangle {
                                     // Update the profileData with new value
                                     profileData.tw = parseFloat(text) || 0
                                     parent.parent.updateProfile()
+                                }
+                                
+                                onTextChanged: {
+                                    // Auto-update name when tw value changes
+                                    Qt.callLater(function() {
+                                        updateProfileName()
+                                    })
                                 }
                             }
                         }
@@ -959,6 +1069,13 @@ Rectangle {
                                     profileData.bfProfiles = parseFloat(text) || 0
                                     parent.parent.updateProfile()
                                 }
+                                
+                                onTextChanged: {
+                                    // Update profile name when bf value changes
+                                    Qt.callLater(function() {
+                                        updateProfileName()
+                                    })
+                                }
                             }
                         }
 
@@ -1034,6 +1151,13 @@ Rectangle {
                                     // Update the profileData with new value
                                     profileData.tf = parseFloat(text) || 0
                                     parent.parent.updateProfile()
+                                }
+                                
+                                onTextChanged: {
+                                    // Update profile name when tf value changes
+                                    Qt.callLater(function() {
+                                        updateProfileName()
+                                    })
                                 }
                             }
                         }
@@ -1749,79 +1873,212 @@ Rectangle {
                     id: shadowRow
                     
                     function resetToLastData(lastProfile) {
-                        shadowTypeField.text = lastProfile.type || ""
-                        shadowNameField.text = ""
-                        shadowHwField.text = lastProfile.hw || "0"
-                        shadowTwField.text = lastProfile.tw || "0"
-                        shadowBfProfilesField.text = lastProfile.bfProfiles || "0"
-                        shadowTfField.text = lastProfile.tf || "0"
-                        shadowAreaField.text = lastProfile.area || "0"
-                        shadowEField.text = lastProfile.e || "0"
-                        shadowWField.text = lastProfile.w || "0"
-                        shadowUpperIField.text = lastProfile.upperI || "0"
-                        shadowLowerLField.text = lastProfile.lowerL || "0"
-                        shadowTbField.text = lastProfile.tb || "0"
-                        shadowBfBracketsField.text = lastProfile.bfBrackets || "0"
-                        shadowTbfField.text = lastProfile.tbf || "0"
+                        var typeValue = lastProfile.type || "Bar"
+                        var typeIndex = shadowTypeField.model.indexOf(typeValue)
+                        shadowTypeField.currentIndex = typeIndex >= 0 ? typeIndex : 3 // Default to "Bar" if not found
+                        
+                        shadowNameField.text = lastProfile.name || ""  // Show name from last entry
+                        shadowHwField.text = lastProfile.hw ? lastProfile.hw.toString() : "0"
+                        shadowTwField.text = lastProfile.tw ? lastProfile.tw.toString() : "0"
+                        shadowBfProfilesField.text = lastProfile.bfProfiles ? lastProfile.bfProfiles.toString() : "0"
+                        shadowTfField.text = lastProfile.tf ? lastProfile.tf.toString() : "0"
+                        shadowAreaField.text = lastProfile.area ? lastProfile.area.toString() : "0"
+                        shadowEField.text = lastProfile.e ? lastProfile.e.toString() : "0"
+                        shadowWField.text = lastProfile.w ? lastProfile.w.toString() : "0"
+                        shadowUpperIField.text = lastProfile.upperI ? lastProfile.upperI.toString() : "0"
+                        shadowLowerLField.text = lastProfile.lowerL ? lastProfile.lowerL.toString() : "0"
+                        shadowTbField.text = lastProfile.tb ? lastProfile.tb.toString() : "0"
+                        shadowBfBracketsField.text = lastProfile.bfBrackets ? lastProfile.bfBrackets.toString() : "0"
+                        shadowTbfField.text = lastProfile.tbf ? lastProfile.tbf.toString() : "0"
+                    }
+                    
+                    Component.onCompleted: {
+                        // Initialize shadow row dengan data terakhir setelah data load
+                        root.resetShadowRow()
                     }
                     
                     // Type column
                     Rectangle {
                         width: columnWidths[0]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
-                        TextInput {
+                        ComboBox {
                             id: shadowTypeField
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
-                            selectByMouse: true
-                            text: ""
+                            anchors.centerIn: parent
+                            width: parent.width - 4
+                            height: 25
+                            model: ["HP", "L", "T", "Bar"]
+                            currentIndex: 3 // Default to "Bar"
+                            font.pixelSize: 9
+                            
+                            property alias text: shadowTypeField.currentText
+                            
+                            onCurrentTextChanged: {
+                                console.log("Shadow type changed to:", currentText)
+                                
+                                // Get current values
+                                var hwValue = shadowHwField.text
+                                var twValue = shadowTwField.text  
+                                var bfValue = shadowBfProfilesField.text
+                                var tfValue = shadowTfField.text
+                                
+                                console.log("Shadow values - hw:", hwValue, "tw:", twValue, "bf:", bfValue, "tf:", tfValue)
+                                
+                                // Auto-generate name when type changes
+                                var newName = generateProfileName(
+                                    currentText,
+                                    hwValue,
+                                    twValue,
+                                    bfValue,
+                                    tfValue
+                                )
+                                
+                                console.log("Shadow generated name:", newName)
+                                shadowNameField.text = newName
+                                console.log("Shadow name field updated to:", shadowNameField.text)
+                            }
                         }
                     }
                     
                     // Name column
                     Rectangle {
                         width: columnWidths[1]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowNameField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: ""
+                            color: "#666" // Gray text to distinguish from data rows
+                            
+                            KeyNavigation.tab: shadowHwField
+                            KeyNavigation.backtab: shadowTbfField
+                            KeyNavigation.left: shadowNameField
+                            KeyNavigation.right: shadowHwField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[1] && lastRow.children[1].children[0]) {
+                                        focusAndSelect(lastRow.children[1].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowHwField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                // Add new profile when Enter is pressed
+                                saveMouseArea.clicked()
+                            }
                         }
                     }
                     
                     // hw column
                     Rectangle {
                         width: columnWidths[2]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowHwField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            color: "#666" // Gray text to distinguish from data rows
+                            
+                            KeyNavigation.tab: shadowTwField
+                            KeyNavigation.backtab: shadowNameField
+                            KeyNavigation.left: shadowNameField
+                            KeyNavigation.right: shadowTwField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[2] && lastRow.children[2].children[0]) {
+                                        focusAndSelect(lastRow.children[2].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowTwField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowNameField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
+                            }
+                            
+                            onTextChanged: {
+                                // Auto-update name when hw value changes
+                                var newName = generateProfileName(
+                                    shadowTypeField.currentText,
+                                    text,
+                                    shadowTwField.text,
+                                    shadowBfProfilesField.text,
+                                    shadowTfField.text
+                                )
+                                shadowNameField.text = newName
                             }
                         }
                     }
@@ -1829,22 +2086,75 @@ Rectangle {
                     // tw column
                     Rectangle {
                         width: columnWidths[3]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowTwField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            color: "#666" // Gray text to distinguish from data rows
+                            
+                            KeyNavigation.tab: shadowBfProfilesField
+                            KeyNavigation.backtab: shadowHwField
+                            KeyNavigation.left: shadowHwField
+                            KeyNavigation.right: shadowBfProfilesField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[3] && lastRow.children[3].children[0]) {
+                                        focusAndSelect(lastRow.children[3].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowBfProfilesField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowHwField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
+                            }
+                            
+                            onTextChanged: {
+                                // Auto-update name when tw value changes
+                                var newName = generateProfileName(
+                                    shadowTypeField.currentText,
+                                    shadowHwField.text,
+                                    text,
+                                    shadowBfProfilesField.text,
+                                    shadowTfField.text
+                                )
+                                shadowNameField.text = newName
                             }
                         }
                     }
@@ -1852,22 +2162,75 @@ Rectangle {
                     // bfProfiles column
                     Rectangle {
                         width: columnWidths[4]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowBfProfilesField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            color: "#666" // Gray text to distinguish from data rows
+                            
+                            KeyNavigation.tab: shadowTfField
+                            KeyNavigation.backtab: shadowTwField
+                            KeyNavigation.left: shadowTwField
+                            KeyNavigation.right: shadowTfField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[4] && lastRow.children[4].children[0]) {
+                                        focusAndSelect(lastRow.children[4].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowTfField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowTwField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
+                            }
+                            
+                            onTextChanged: {
+                                // Auto-update name when bf value changes
+                                var newName = generateProfileName(
+                                    shadowTypeField.currentText,
+                                    shadowHwField.text,
+                                    shadowTwField.text,
+                                    text,
+                                    shadowTfField.text
+                                )
+                                shadowNameField.text = newName
                             }
                         }
                     }
@@ -1875,22 +2238,75 @@ Rectangle {
                     // tf column
                     Rectangle {
                         width: columnWidths[5]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowTfField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            color: "#666"
+                            
+                            KeyNavigation.tab: shadowAreaField
+                            KeyNavigation.backtab: shadowBfProfilesField
+                            KeyNavigation.left: shadowBfProfilesField
+                            KeyNavigation.right: shadowAreaField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[5] && lastRow.children[5].children[0]) {
+                                        focusAndSelect(lastRow.children[5].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowAreaField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowBfProfilesField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
+                            }
+                            
+                            onTextChanged: {
+                                // Auto-update name when tf value changes
+                                var newName = generateProfileName(
+                                    shadowTypeField.currentText,
+                                    shadowHwField.text,
+                                    shadowTwField.text,
+                                    shadowBfProfilesField.text,
+                                    text
+                                )
+                                shadowNameField.text = newName
                             }
                         }
                     }
@@ -1898,22 +2314,63 @@ Rectangle {
                     // Area column
                     Rectangle {
                         width: columnWidths[6]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowAreaField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
+                            color: "#666"
+                            
+                            KeyNavigation.tab: shadowEField
+                            KeyNavigation.backtab: shadowTfField
+                            KeyNavigation.left: shadowTfField
+                            KeyNavigation.right: shadowEField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[6] && lastRow.children[6].children[0]) {
+                                        focusAndSelect(lastRow.children[6].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowEField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowTfField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
                             }
                         }
                     }
@@ -1921,22 +2378,63 @@ Rectangle {
                     // e column
                     Rectangle {
                         width: columnWidths[7]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowEField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
+                            color: "#666"
+                            
+                            KeyNavigation.tab: shadowWField
+                            KeyNavigation.backtab: shadowAreaField
+                            KeyNavigation.left: shadowAreaField
+                            KeyNavigation.right: shadowWField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[7] && lastRow.children[7].children[0]) {
+                                        focusAndSelect(lastRow.children[7].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowWField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowAreaField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
                             }
                         }
                     }
@@ -1944,22 +2442,63 @@ Rectangle {
                     // w column
                     Rectangle {
                         width: columnWidths[8]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowWField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
+                            color: "#666"
+                            
+                            KeyNavigation.tab: shadowUpperIField
+                            KeyNavigation.backtab: shadowEField
+                            KeyNavigation.left: shadowEField
+                            KeyNavigation.right: shadowUpperIField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[8] && lastRow.children[8].children[0]) {
+                                        focusAndSelect(lastRow.children[8].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowUpperIField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowEField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
                             }
                         }
                     }
@@ -1967,22 +2506,63 @@ Rectangle {
                     // upperI column
                     Rectangle {
                         width: columnWidths[9]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowUpperIField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
+                            color: "#666"
+                            
+                            KeyNavigation.tab: shadowLowerLField
+                            KeyNavigation.backtab: shadowWField
+                            KeyNavigation.left: shadowWField
+                            KeyNavigation.right: shadowLowerLField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[9] && lastRow.children[9].children[0]) {
+                                        focusAndSelect(lastRow.children[9].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowLowerLField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowWField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
                             }
                         }
                     }
@@ -1990,22 +2570,63 @@ Rectangle {
                     // lowerL column
                     Rectangle {
                         width: columnWidths[10]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowLowerLField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: IntValidator { bottom: 0 }
+                            color: "#666"
+                            
+                            KeyNavigation.tab: shadowTbField
+                            KeyNavigation.backtab: shadowUpperIField
+                            KeyNavigation.left: shadowUpperIField
+                            KeyNavigation.right: shadowTbField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[10] && lastRow.children[10].children[0]) {
+                                        focusAndSelect(lastRow.children[10].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowTbField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowUpperIField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
                             }
                         }
                     }
@@ -2013,22 +2634,63 @@ Rectangle {
                     // tb column
                     Rectangle {
                         width: columnWidths[11]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowTbField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            color: "#666"
+                            
+                            KeyNavigation.tab: shadowBfBracketsField
+                            KeyNavigation.backtab: shadowLowerLField
+                            KeyNavigation.left: shadowLowerLField
+                            KeyNavigation.right: shadowBfBracketsField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[11] && lastRow.children[11].children[0]) {
+                                        focusAndSelect(lastRow.children[11].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowBfBracketsField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowLowerLField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
                             }
                         }
                     }
@@ -2036,22 +2698,63 @@ Rectangle {
                     // bfBrackets column
                     Rectangle {
                         width: columnWidths[12]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowBfBracketsField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
+                            validator: IntValidator { bottom: 0 }
+                            color: "#666"
+                            
+                            KeyNavigation.tab: shadowTbfField
+                            KeyNavigation.backtab: shadowTbField
+                            KeyNavigation.left: shadowTbField
+                            KeyNavigation.right: shadowTbfField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[12] && lastRow.children[12].children[0]) {
+                                        focusAndSelect(lastRow.children[12].children[0])
+                                    }
+                                }
+                            }
+                            
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    focusAndSelect(shadowTbfField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowTbField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
                             }
                         }
                     }
@@ -2059,97 +2762,124 @@ Rectangle {
                     // tbf column
                     Rectangle {
                         width: columnWidths[13]
-                        height: 40
+                        height: 30
                         border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
                         
                         TextInput {
                             id: shadowTbfField
                             anchors.fill: parent
-                            anchors.margins: 4
-                            font.pixelSize: 12
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.margins: 2
+                            font.pixelSize: 10
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator {
-                                bottom: 0.0
-                                decimals: 3
-                            }
-                        }
-                    }
-                    
-                    // Action column untuk save/cancel
-                    Rectangle {
-                        width: columnWidths[14]
-                        height: 40
-                        border.width: 1
-                        border.color: "#CCCCCC"
-                        color: "#F8F8F8"
-                        
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 5
+                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            color: "#666"
                             
-                            // Save button
-                            Rectangle {
-                                width: 20
-                                height: 20
-                                color: saveMouseArea.containsMouse ? "#4CAF50" : "#66BB6A"
-                                radius: 2
-                                
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "✓"
-                                    font.pixelSize: 12
-                                    color: "white"
-                                }
-                                
-                                MouseArea {
-                                    id: saveMouseArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: {
-                                        addNewProfile(
-                                            shadowTypeField.text,
-                                            shadowNameField.text,
-                                            parseFloat(shadowHwField.text) || 0,
-                                            parseFloat(shadowTwField.text) || 0,
-                                            parseFloat(shadowBfProfilesField.text) || 0,
-                                            parseFloat(shadowTfField.text) || 0,
-                                            parseFloat(shadowAreaField.text) || 0,
-                                            parseFloat(shadowEField.text) || 0,
-                                            parseFloat(shadowWField.text) || 0,
-                                            parseFloat(shadowUpperIField.text) || 0,
-                                            parseFloat(shadowLowerLField.text) || 0,
-                                            parseFloat(shadowTbField.text) || 0,
-                                            parseFloat(shadowBfBracketsField.text) || 0,
-                                            parseFloat(shadowTbfField.text) || 0
-                                        )
+                            KeyNavigation.tab: shadowNameField
+                            KeyNavigation.backtab: shadowBfBracketsField
+                            KeyNavigation.left: shadowBfBracketsField
+                            KeyNavigation.right: shadowTbfField
+                            
+                            Keys.onUpPressed: {
+                                if (profileRepeater.count > 0) {
+                                    var lastRow = profileRepeater.itemAt(profileRepeater.count - 1)
+                                    if (lastRow && lastRow.children[13] && lastRow.children[13].children[0]) {
+                                        focusAndSelect(lastRow.children[13].children[0])
                                     }
                                 }
                             }
                             
-                            // Cancel button
-                            Rectangle {
-                                width: 20
-                                height: 20
-                                color: cancelMouseArea.containsMouse ? "#F44336" : "#EF5350"
-                                radius: 2
-                                
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "✗"
-                                    font.pixelSize: 12
-                                    color: "white"
+                            Keys.onRightPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else if (cursorPosition >= text.length) {
+                                    cursorPosition = text.length
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
                                 }
-                                
-                                MouseArea {
-                                    id: cancelMouseArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: {
-                                        resetShadowRow()
+                            }
+                            
+                            Keys.onLeftPressed: {
+                                if (selectedText.length > 0) {
+                                    cursorPosition = 0
+                                    event.accepted = true
+                                } else if (cursorPosition <= 0) {
+                                    focusAndSelect(shadowBfBracketsField)
+                                    event.accepted = true
+                                } else {
+                                    event.accepted = false
+                                }
+                            }
+                            
+                            Keys.onReturnPressed: {
+                                saveMouseArea.clicked()
+                            }
+                        }
+                    }
+                    
+                    // Action column untuk add button
+                    Rectangle {
+                        width: columnWidths[14]
+                        height: 30
+                        border.width: 1
+                        border.color: "#ddd"
+                        color: "#f8f8f8"
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Add"
+                            font.pixelSize: 10
+                            color: "#2196F3"
+                            font.bold: true
+                            
+                            MouseArea {
+                                id: saveMouseArea
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    // Debug: print values before calling addNewProfile
+                                    console.log("Debug - Type:", shadowTypeField.currentText)
+                                    console.log("Debug - Name:", shadowNameField.text)
+                                    console.log("Debug - Values:", parseFloat(shadowHwField.text) || 0, parseFloat(shadowTwField.text) || 0)
+                                    
+                                    // Ensure name is not empty and make it unique
+                                    var profileName = shadowNameField.text.trim()
+                                    if (profileName === "" || profileName === "Bar Test") {
+                                        // Generate unique name with timestamp
+                                        var now = new Date()
+                                        profileName = "Profile_" + now.getTime().toString().slice(-6)
+                                    }
+                                    
+                                    console.log("Final profile name:", profileName)
+                                    
+                                    var success = addNewProfile(
+                                        shadowTypeField.currentText,
+                                        profileName,
+                                        parseFloat(shadowHwField.text) || 0,
+                                        parseFloat(shadowTwField.text) || 0,
+                                        parseFloat(shadowBfProfilesField.text) || 0,
+                                        parseFloat(shadowTfField.text) || 0,
+                                        parseFloat(shadowAreaField.text) || 0,
+                                        parseFloat(shadowEField.text) || 0,
+                                        parseFloat(shadowWField.text) || 0,
+                                        parseFloat(shadowUpperIField.text) || 0,
+                                        parseFloat(shadowLowerLField.text) || 0,
+                                        parseFloat(shadowTbField.text) || 0,
+                                        parseFloat(shadowBfBracketsField.text) || 0,
+                                        parseFloat(shadowTbfField.text) || 0
+                                    )
+                                    
+                                    if (!success) {
+                                        console.log("Error: Failed to add profile")
+                                        if (profileController) {
+                                            console.log("Last error:", profileController.lastError)
+                                        }
                                     }
                                 }
                             }
