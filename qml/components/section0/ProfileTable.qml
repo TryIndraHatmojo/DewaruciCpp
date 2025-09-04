@@ -37,6 +37,25 @@ Rectangle {
     border.width: 2
     radius: 8
 
+    // Property untuk menyimpan lebar kolom yang dapat di-resize
+    property var columnWidths: [
+        root.width * 0.06,  // Type - 6%
+        root.width * 0.11,  // Name - 11%
+        root.width * 0.06,  // hw - 6%
+        root.width * 0.06,  // tw - 6%
+        root.width * 0.06,  // bf (Profiles) - 6%
+        root.width * 0.06,  // tf - 6%
+        root.width * 0.07,  // Area - 7%
+        root.width * 0.06,  // e - 6%
+        root.width * 0.08,  // W - 8%
+        root.width * 0.08,  // I - 8%
+        root.width * 0.07,  // l - 7%
+        root.width * 0.06,  // tb - 6%
+        root.width * 0.06,  // bf (Brackets) - 6%
+        root.width * 0.06,  // tbf - 6%
+        root.width * 0.05   // Action - 5%
+    ]
+    
     property var tableModel: []
     property alias rehBrackets: rehBracketsInput.text
     property alias rehProfiles: rehProfilesInput.text
@@ -47,24 +66,74 @@ Rectangle {
     // Flag untuk prevent recursive shadow row updates
     property bool isUpdatingShadowRow: false
     
-    // Property untuk menyimpan lebar kolom yang dapat di-resize
-    property var columnWidths: [
-        root.width * 0.06,  // Type - 6%
-        root.width * 0.10,  // Name - 10%
-        root.width * 0.06,  // hw - 6%
-        root.width * 0.06,  // tw - 6%
-        root.width * 0.06,  // bf (Profiles) - 6%
-        root.width * 0.06,  // tf - 6%
-        root.width * 0.07,  // Area - 7%
-        root.width * 0.06,  // e - 6%
-        root.width * 0.07,  // W - 7%
-        root.width * 0.07,  // I - 7%
-        root.width * 0.06,  // l - 6%
-        root.width * 0.06,  // tb - 6%
-        root.width * 0.06,  // bf (Brackets) - 6%
-        root.width * 0.06,  // tbf - 6%
-        root.width * 0.05   // Action - 5%
-    ]
+    // Flag untuk prevent automatic recalculation during manual resize
+    property bool isManuallyResizing: false
+    
+    // Timer untuk debounce resize calculations
+    Timer {
+        id: resizeTimer
+        interval: 5 // ~60 FPS untuk smooth update
+        running: false
+        repeat: false
+        onTriggered: {
+            if (!isManuallyResizing) {
+                recalculateColumnWidths()
+            }
+        }
+    }
+    
+    // Handler untuk auto-recalculate column widths ketika table width berubah
+    onWidthChanged: {
+        if (width > 0 && !isManuallyResizing) {
+            // Use timer to debounce rapid resize events
+            resizeTimer.restart()
+        }
+    }
+    
+    // Minimum widths for each column
+    property var minColumnWidths: [50, 80, 50, 50, 50, 50, 60, 50, 60, 60, 50, 50, 50, 50, 40]
+    
+    // Function to update column width dengan minimum constraint
+    function updateColumnWidth(columnIndex, newWidth) {
+        var minWidth = minColumnWidths[columnIndex] || 40
+        var actualWidth = Math.max(newWidth, minWidth)
+        
+        // Create a new array to trigger property change
+        var newColumnWidths = columnWidths.slice()
+        newColumnWidths[columnIndex] = actualWidth
+        columnWidths = newColumnWidths
+    }
+    
+    // Function to recalculate all column widths based on current table width
+    function recalculateColumnWidths() {
+        var newColumnWidths = [
+            root.width * 0.06,  // Type - 6%
+            root.width * 0.11,  // Name - 11%
+            root.width * 0.06,  // hw - 6%
+            root.width * 0.06,  // tw - 6%
+            root.width * 0.06,  // bf (Profiles) - 6%
+            root.width * 0.06,  // tf - 6%
+            root.width * 0.07,  // Area - 7%
+            root.width * 0.06,  // e - 6%
+            root.width * 0.08,  // W - 8%
+            root.width * 0.08,  // I - 8%
+            root.width * 0.07,  // l - 7%
+            root.width * 0.06,  // tb - 6%
+            root.width * 0.06,  // bf (Brackets) - 6%
+            root.width * 0.06,  // tbf - 6%
+            root.width * 0.05   // Action - 5%
+        ]
+        
+        // Apply minimum width constraints efficiently
+        for (var i = 0; i < newColumnWidths.length; i++) {
+            var minWidth = minColumnWidths[i] || 40
+            if (newColumnWidths[i] < minWidth) {
+                newColumnWidths[i] = minWidth
+            }
+        }
+        
+        columnWidths = newColumnWidths
+    }
 
     // Function untuk refresh data dari database (hanya untuk initial load)
     function refreshData() {
@@ -210,6 +279,8 @@ Rectangle {
 
     // Load data when component is completed
     Component.onCompleted: {
+        // Initialize column widths based on initial table width
+        recalculateColumnWidths()
         refreshData()
     }
     
@@ -575,16 +646,6 @@ Rectangle {
                     }
                 }
 
-                Button {
-                    text: "Load Data"
-                    Layout.preferredHeight: 20
-                    font.pixelSize: 9
-                    onClicked: {
-                        if (profileController) {
-                            profileController.loadSampleData()
-                        }
-                    }
-                }
             }
 
             // Controls row
@@ -601,47 +662,6 @@ Rectangle {
                     Layout.fillWidth: true
                 }
 
-                Button {
-                    text: "Add Profile"
-                    Layout.preferredHeight: 20
-                    font.pixelSize: 9
-                    onClicked: {
-                        if (profileController) {
-                            profileController.createProfile(
-                                "Bar", "Bar Test", 400.0, 26.0, 85.0, 14.7,
-                                104.0, 200.0, 1359.29, 48096.0,
-                                512.0, 14.7, 85.0, 14.7
-                            )
-                        }
-                    }
-                }
-
-                Button {
-                    text: "Clear All"
-                    Layout.preferredHeight: 20
-                    font.pixelSize: 9
-                    onClicked: {
-                        if (profileController) {
-                            if (profileController.clearAllProfiles()) {
-                                console.log("All profiles cleared successfully")
-                                // Clear tableModel instead of full refresh
-                                tableModel = []
-                            } else {
-                                console.log("Failed to clear all profiles")
-                            }
-                        }
-                    }
-                }
-
-                Button {
-                    text: "Refresh"
-                    Layout.preferredHeight: 20
-                    font.pixelSize: 9
-                    onClicked: {
-                        console.log("Refresh button clicked - loading data from database")
-                        refreshData()
-                    }
-                }
             }
         }
     }
@@ -720,232 +740,828 @@ Rectangle {
                     }
                 }
 
-                // Second row - sub headers
+                // Second row - sub headers dengan resize handles
                 Row {
                     height: 35
 
-                    Rectangle {
+                    // Type Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[0]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Type"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
+                        
+                        Rectangle {
+                            id: typeHeader
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Type"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                            }
+                        }
+                        
+                        // Resize handle
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    isManuallyResizing = true
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[0]
+                                }
+                                
+                                onReleased: function(mouse) {
+                                    isManuallyResizing = false
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(0, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // Name Header dengan Resize Handle  
+                    Item {
                         width: root.columnWidths[1]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Name"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Name"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[1]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(1, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // hw Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[2]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "hw\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "hw\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[2]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(2, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // tw Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[3]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "tw\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "tw\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[3]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(3, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // bf Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[4]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "bf\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "bf\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[4]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(4, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // tf Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[5]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "tf\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "tf\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[5]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(5, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // Area Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[6]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Area\n[cm²]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Area\n[cm²]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[6]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(6, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // e Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[7]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "e\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "e\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[7]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(7, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // W Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[8]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "W\n[cm³]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "W\n[cm³]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[8]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(8, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // I Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[9]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "I\n[cm⁴]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "I\n[cm⁴]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[9]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(9, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // l Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[10]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "l\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "l\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[10]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(10, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // tb Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[11]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "tb\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "tb\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[11]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(11, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // bf (Brackets) Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[12]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "bf\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "bf\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[12]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(12, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
+                    // tbf Header dengan Resize Handle
+                    Item {
                         width: root.columnWidths[13]
                         height: 35
-                        color: "#1e4a6b"
-                        border.color: "#ddd"
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: "tbf\n[mm]"
-                            color: "white"
-                            font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1e4a6b"
+                            border.color: "#ddd"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "tbf\n[mm]"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 4
+                            color: "transparent"
+                            
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 2
+                                height: parent.height * 0.6
+                                color: "#999"
+                                opacity: 0.5
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                
+                                property real startX
+                                property real startWidth
+                                
+                                onPressed: function(mouse) {
+                                    startX = mouse.x
+                                    startWidth = root.columnWidths[13]
+                                }
+                                
+                                onPositionChanged: function(mouse) {
+                                    if (pressed) {
+                                        var deltaX = mouse.x - startX
+                                        var newWidth = startWidth + deltaX
+                                        updateColumnWidth(13, newWidth)
+                                    }
+                                }
+                            }
                         }
                     }
 
+                    // Action Header (tidak perlu resize handle karena kolom terakhir)
                     Rectangle {
                         width: root.columnWidths[14]
                         height: 35
@@ -956,11 +1572,11 @@ Rectangle {
                 }
             }
         }
-
         // Scrollable table content
         ScrollView {
             id: scrollView
             anchors.top: columnHeaders.bottom
+            anchors.topMargin: -1
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -972,6 +1588,7 @@ Rectangle {
 
             Column {
                 width: scrollView.width
+                spacing: 0
                 
                 // Data rows
                 Repeater {
@@ -1379,7 +1996,7 @@ Rectangle {
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
-                                validator: DoubleValidator { bottom: 0; decimals: 1 }
+                                validator: DoubleValidator { bottom: 0; decimals: 2 }
                                 selectByMouse: true
                                 
                                 KeyNavigation.tab: twInput
@@ -1446,6 +2063,9 @@ Rectangle {
                                 onFocusChanged: {
                                     if (!focus) {
                                         isUserEditing = false
+                                        // Format the text properly when losing focus to prevent scientific notation
+                                        var value = parseFloat(text) || 0
+                                        text = value.toFixed(2)
                                     }
                                 }
                                 
@@ -1476,7 +2096,7 @@ Rectangle {
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
-                                validator: DoubleValidator { bottom: 0; decimals: 1 }
+                                validator: DoubleValidator { bottom: 0; decimals: 2 }
                                 selectByMouse: true
                                 
                                 KeyNavigation.tab: bfProfilesInput
@@ -1543,6 +2163,9 @@ Rectangle {
                                 onFocusChanged: {
                                     if (!focus) {
                                         isUserEditing = false
+                                        // Format the text properly when losing focus to prevent scientific notation
+                                        var value = parseFloat(text) || 0
+                                        text = value.toFixed(2)
                                     }
                                 }
                                 
@@ -1573,7 +2196,7 @@ Rectangle {
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
-                                validator: DoubleValidator { bottom: 0; decimals: 1 }
+                                validator: DoubleValidator { bottom: 0; decimals: 2 }
                                 selectByMouse: true
                                 
                                 KeyNavigation.tab: tfInput
@@ -1640,6 +2263,9 @@ Rectangle {
                                 onFocusChanged: {
                                     if (!focus) {
                                         isUserEditing = false
+                                        // Format the text properly when losing focus to prevent scientific notation
+                                        var value = parseFloat(text) || 0
+                                        text = value.toFixed(2)
                                     }
                                 }
                                 
@@ -1670,7 +2296,7 @@ Rectangle {
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
-                                validator: DoubleValidator { bottom: 0; decimals: 1 }
+                                validator: DoubleValidator { bottom: 0; decimals: 2 }
                                 selectByMouse: true
                                 
                                 KeyNavigation.tab: areaInput
@@ -1737,6 +2363,9 @@ Rectangle {
                                 onFocusChanged: {
                                     if (!focus) {
                                         isUserEditing = false
+                                        // Format the text properly when losing focus to prevent scientific notation
+                                        var value = parseFloat(text) || 0
+                                        text = value.toFixed(2)
                                     }
                                 }
                                 
@@ -2153,7 +2782,7 @@ Rectangle {
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
-                                validator: DoubleValidator { bottom: 0; decimals: 1 }
+                                validator: DoubleValidator { bottom: 0; decimals: 2 }
                                 selectByMouse: true
                                 
                                 KeyNavigation.tab: bfBracketsInput
@@ -2307,7 +2936,7 @@ Rectangle {
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
-                                validator: DoubleValidator { bottom: 0; decimals: 1 }
+                                validator: DoubleValidator { bottom: 0; decimals: 2 }
                                 selectByMouse: true
                                 
                                 KeyNavigation.tab: nameInput // Loop back to first cell (or move to next row)
@@ -2616,6 +3245,48 @@ Rectangle {
                         })
                     }
                     
+                    // Function untuk save shadow row data sebagai profile baru
+                    function saveProfile() {
+                        // Debug: print values before calling addNewProfile
+                        console.log("Debug - Type:", shadowTypeField.currentText)
+                        console.log("Debug - Name:", shadowNameField.text)
+                        console.log("Debug - Values:", parseFloat(shadowHwField.text) || 0, parseFloat(shadowTwField.text) || 0)
+                        
+                        // Ensure name is not empty and make it unique
+                        var profileName = shadowNameField.text.trim()
+                        if (profileName === "" || profileName === "Bar Test") {
+                            // Generate unique name with timestamp
+                            var now = new Date()
+                            profileName = "Profile_" + now.getTime().toString().slice(-6)
+                        }
+                        
+                        console.log("Final profile name:", profileName)
+                        
+                        var success = addNewProfile(
+                            shadowTypeField.currentText,
+                            profileName,
+                            parseFloat(shadowHwField.text) || 0,
+                            parseFloat(shadowTwField.text) || 0,
+                            parseFloat(shadowBfProfilesField.text) || 0,
+                            parseFloat(shadowTfField.text) || 0,
+                            parseFloat(shadowAreaField.text) || 0,
+                            parseFloat(shadowEField.text) || 0,
+                            parseFloat(shadowWField.text) || 0,
+                            parseFloat(shadowUpperIField.text) || 0,
+                            parseFloat(shadowLowerLField.text) || 0,
+                            parseFloat(shadowTbField.text) || 0,
+                            parseFloat(shadowBfBracketsField.text) || 0,
+                            parseFloat(shadowTbfField.text) || 0
+                        )
+                        
+                        if (!success) {
+                            console.log("Error: Failed to add profile")
+                            if (profileController) {
+                                console.log("Last error:", profileController.lastError)
+                            }
+                        }
+                    }
+                    
                     Component.onCompleted: {
                         // Initialize shadow row dengan data terakhir setelah data load
                         root.resetShadowRow()
@@ -2712,7 +3383,7 @@ Rectangle {
                             
                             Keys.onReturnPressed: {
                                 // Add new profile when Enter is pressed
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                             
                             onTextChanged: {
@@ -2749,7 +3420,7 @@ Rectangle {
                             verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
                             color: "#666" // Gray text to distinguish from data rows
                             
                             KeyNavigation.tab: shadowTwField
@@ -2791,7 +3462,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                             
                             onTextChanged: {
@@ -2822,7 +3493,7 @@ Rectangle {
                             verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
                             color: "#666" // Gray text to distinguish from data rows
                             
                             KeyNavigation.tab: shadowBfProfilesField
@@ -2864,7 +3535,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                             
                             onTextChanged: {
@@ -2895,7 +3566,7 @@ Rectangle {
                             verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
                             color: "#666" // Gray text to distinguish from data rows
                             
                             KeyNavigation.tab: shadowTfField
@@ -2937,7 +3608,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                             
                             onTextChanged: {
@@ -2968,7 +3639,7 @@ Rectangle {
                             verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
                             color: "#666"
                             
                             KeyNavigation.tab: shadowAreaField
@@ -3010,7 +3681,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                             
                             onTextChanged: {
@@ -3083,7 +3754,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                         }
                     }
@@ -3147,7 +3818,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                         }
                     }
@@ -3211,7 +3882,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                         }
                     }
@@ -3275,7 +3946,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                         }
                     }
@@ -3339,7 +4010,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                         }
                     }
@@ -3361,7 +4032,7 @@ Rectangle {
                             verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
                             color: "#666"
                             
                             KeyNavigation.tab: shadowBfBracketsField
@@ -3403,7 +4074,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                         }
                     }
@@ -3467,7 +4138,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                         }
                     }
@@ -3489,7 +4160,7 @@ Rectangle {
                             verticalAlignment: TextInput.AlignVCenter
                             selectByMouse: true
                             text: "0"
-                            validator: DoubleValidator { bottom: 0; decimals: 1 }
+                            validator: DoubleValidator { bottom: 0; decimals: 2 }
                             color: "#666"
                             
                             KeyNavigation.tab: shadowNameField
@@ -3531,7 +4202,7 @@ Rectangle {
                             }
                             
                             Keys.onReturnPressed: {
-                                saveMouseArea.clicked()
+                                shadowRow.saveProfile()
                             }
                         }
                     }
@@ -3556,44 +4227,7 @@ Rectangle {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
-                                    // Debug: print values before calling addNewProfile
-                                    console.log("Debug - Type:", shadowTypeField.currentText)
-                                    console.log("Debug - Name:", shadowNameField.text)
-                                    console.log("Debug - Values:", parseFloat(shadowHwField.text) || 0, parseFloat(shadowTwField.text) || 0)
-                                    
-                                    // Ensure name is not empty and make it unique
-                                    var profileName = shadowNameField.text.trim()
-                                    if (profileName === "" || profileName === "Bar Test") {
-                                        // Generate unique name with timestamp
-                                        var now = new Date()
-                                        profileName = "Profile_" + now.getTime().toString().slice(-6)
-                                    }
-                                    
-                                    console.log("Final profile name:", profileName)
-                                    
-                                    var success = addNewProfile(
-                                        shadowTypeField.currentText,
-                                        profileName,
-                                        parseFloat(shadowHwField.text) || 0,
-                                        parseFloat(shadowTwField.text) || 0,
-                                        parseFloat(shadowBfProfilesField.text) || 0,
-                                        parseFloat(shadowTfField.text) || 0,
-                                        parseFloat(shadowAreaField.text) || 0,
-                                        parseFloat(shadowEField.text) || 0,
-                                        parseFloat(shadowWField.text) || 0,
-                                        parseFloat(shadowUpperIField.text) || 0,
-                                        parseFloat(shadowLowerLField.text) || 0,
-                                        parseFloat(shadowTbField.text) || 0,
-                                        parseFloat(shadowBfBracketsField.text) || 0,
-                                        parseFloat(shadowTbfField.text) || 0
-                                    )
-                                    
-                                    if (!success) {
-                                        console.log("Error: Failed to add profile")
-                                        if (profileController) {
-                                            console.log("Last error:", profileController.lastError)
-                                        }
-                                    }
+                                    shadowRow.saveProfile()
                                 }
                             }
                         }
@@ -3601,6 +4235,7 @@ Rectangle {
                 }
             }
         }
+
     }
         
 
