@@ -93,14 +93,52 @@ Rectangle {
     // Minimum widths for each column
     property var minColumnWidths: [50, 80, 50, 50, 50, 50, 60, 50, 60, 60, 50, 50, 50, 50, 40]
     
-    // Function to update column width dengan minimum constraint
+    // Function to update column width dan maintain total width equal to parent
     function updateColumnWidth(columnIndex, newWidth) {
         var minWidth = minColumnWidths[columnIndex] || 40
-        var actualWidth = Math.max(newWidth, minWidth)
+        var proposedWidth = Math.max(newWidth, minWidth)
+        var targetTotalWidth = root.width - 20 // Leave 20px padding
         
-        // Create a new array to trigger property change
+        // Calculate current total width
+        var currentTotal = 0
+        for (var i = 0; i < columnWidths.length; i++) {
+            currentTotal += columnWidths[i]
+        }
+        
+        // Calculate the difference from changing this column
+        var widthDifference = proposedWidth - columnWidths[columnIndex]
+        var newTotal = currentTotal + widthDifference
+        
         var newColumnWidths = columnWidths.slice()
-        newColumnWidths[columnIndex] = actualWidth
+        newColumnWidths[columnIndex] = proposedWidth
+        
+        // If total width doesn't match target, redistribute the difference to other columns
+        if (Math.abs(newTotal - targetTotalWidth) > 1) { // 1px tolerance
+            var redistributionAmount = targetTotalWidth - newTotal
+            var redistributableColumns = []
+            
+            // Find columns that can be redistributed (excluding the column being resized)
+            for (var j = 0; j < newColumnWidths.length; j++) {
+                if (j !== columnIndex) {
+                    redistributableColumns.push(j)
+                }
+            }
+            
+            if (redistributableColumns.length > 0) {
+                var amountPerColumn = redistributionAmount / redistributableColumns.length
+                
+                // Redistribute the difference among other columns
+                for (var k = 0; k < redistributableColumns.length; k++) {
+                    var colIndex = redistributableColumns[k]
+                    var newColWidth = newColumnWidths[colIndex] + amountPerColumn
+                    var colMinWidth = minColumnWidths[colIndex] || 40
+                    
+                    // Ensure the redistributed width doesn't go below minimum
+                    newColumnWidths[colIndex] = Math.max(newColWidth, colMinWidth)
+                }
+            }
+        }
+        
         columnWidths = newColumnWidths
     }
     
@@ -129,6 +167,23 @@ Rectangle {
             var minWidth = minColumnWidths[i] || 40
             if (newColumnWidths[i] < minWidth) {
                 newColumnWidths[i] = minWidth
+            }
+        }
+        
+        // Ensure total width doesn't exceed parent width
+        var totalWidth = 0
+        for (var j = 0; j < newColumnWidths.length; j++) {
+            totalWidth += newColumnWidths[j]
+        }
+        
+        var maxAllowedWidth = root.width - 20 // Leave 20px padding
+        if (totalWidth > maxAllowedWidth) {
+            // Proportionally scale down all columns while respecting minimum widths
+            var scaleFactor = maxAllowedWidth / totalWidth
+            for (var k = 0; k < newColumnWidths.length; k++) {
+                var minWidth = minColumnWidths[k] || 40
+                var scaledWidth = newColumnWidths[k] * scaleFactor
+                newColumnWidths[k] = Math.max(scaledWidth, minWidth)
             }
         }
         
