@@ -16,6 +16,9 @@ Rectangle {
     property alias rehBrackets: rehBracketsInput.text
     property alias rehProfiles: rehProfilesInput.text
     
+    // Flag untuk membedakan antara initial load dan user changes
+    property bool isInitialLoad: true
+    
     // Property untuk menyimpan lebar kolom yang dapat di-resize
     property var columnWidths: [
         root.width * 0.06,  // Type - 6%
@@ -49,9 +52,13 @@ Rectangle {
             }
             tableModel = validProfiles
             console.log("Loaded", validProfiles.length, "valid profiles from database")
+            
+            // Set flag bahwa initial load sudah selesai
+            isInitialLoad = false
         } else {
             console.log("Profile controller not available")
             tableModel = []
+            isInitialLoad = false
         }
     }
 
@@ -767,9 +774,18 @@ Rectangle {
                         clip: true
 
                         property var originalValues: ({}) // Store original values for comparison
+                        property bool isUserEditing: false // Flag to track user editing
                         
                         // Function to update name based on current field values
                         function updateProfileName() {
+                            // Skip calculations during initial load
+                            if (root.isInitialLoad) {
+                                console.log("Skipping calculations during initial load for row", rowIndex)
+                                return
+                            }
+                            
+                            console.log("updateProfileName called for row", rowIndex)
+                            
                             var typeField = children[0].children[0] // ComboBox
                             var nameField = children[1].children[0] // Name TextInput
                             var hwField = children[2].children[0] // hw TextInput  
@@ -784,8 +800,6 @@ Rectangle {
                             var tbField = children[11].children[0] // tb TextInput
                             var bfBracketsField = children[12].children[0] // bfBrackets TextInput
                             var tbfField = children[13].children[0] // tbf TextInput
-                            
-                            console.log("updateProfileName called for row", rowIndex)
                             
                             var newName = generateProfileName(
                                 typeField.currentText,
@@ -847,50 +861,124 @@ Rectangle {
                             console.log("Row", rowIndex, "all fields updated - name:", newName, "area:", areaField.text, "e:", eField.text, "w:", wField.text, "upperI:", upperIField.text, "l:", lField.text, "tb:", tbField.text, "bf:", bfBracketsField.text, "tbf:", tbfField.text)
                         }
                         
+                        // Common function to handle database update on editing finish
+                        function handleEditingFinished() {
+                            // Skip if during initial load
+                            if (root.isInitialLoad) {
+                                console.log("Skipping handleEditingFinished during initial load for row", rowIndex)
+                                return
+                            }
+                            
+                            // Only update if user is actually editing
+                            if (!isUserEditing) {
+                                console.log("Skipping handleEditingFinished - not user editing for row", rowIndex)
+                                return
+                            }
+                            
+                            console.log("handleEditingFinished called for row", rowIndex)
+                            // Ensure profileData is properly updated before calling updateProfile
+                            Qt.callLater(function() {
+                                updateProfile()
+                            })
+                        }
+                        
                         function updateProfile() {
-                            if (profileController && profileData.id) {
-                                // Check if any values have actually changed
-                                var hasChanges = false
-                                var currentValues = {
-                                    type: profileData.type || "",
-                                    name: profileData.name || "",
-                                    hw: profileData.hw || 0,
-                                    tw: profileData.tw || 0,
-                                    bfProfiles: profileData.bfProfiles || 0,
-                                    tf: profileData.tf || 0,
-                                    area: profileData.area || 0,
-                                    e: profileData.e || 0,
-                                    w: profileData.w || 0,
-                                    upperI: profileData.upperI || 0,
-                                    lowerL: profileData.lowerL || 0,
-                                    tb: profileData.tb || 0,
-                                    bfBrackets: profileData.bfBrackets || 0,
-                                    tbf: profileData.tbf || 0
-                                }
+                            if (!profileController || !profileData.id) {
+                                console.log("Skipping updateProfile - missing controller or profile ID for row", rowIndex)
+                                return
+                            }
+                            
+                            // Skip if during initial load
+                            if (root.isInitialLoad) {
+                                console.log("Skipping updateProfile during initial load for row", rowIndex)
+                                return
+                            }
+                            
+                            // Check if any values have actually changed
+                            var hasChanges = false
+                            var currentValues = {
+                                type: profileData.type || "",
+                                name: profileData.name || "",
+                                hw: profileData.hw || 0,
+                                tw: profileData.tw || 0,
+                                bfProfiles: profileData.bfProfiles || 0,
+                                tf: profileData.tf || 0,
+                                area: profileData.area || 0,
+                                e: profileData.e || 0,
+                                w: profileData.w || 0,
+                                upperI: profileData.upperI || 0,
+                                lowerL: profileData.lowerL || 0,
+                                tb: profileData.tb || 0,
+                                bfBrackets: profileData.bfBrackets || 0,
+                                tbf: profileData.tbf || 0
+                            }
+                            
+                            // Compare with original values using tolerance for floating point numbers
+                            for (var key in currentValues) {
+                                var original = originalValues[key] || 0
+                                var current = currentValues[key] || 0
                                 
-                                // Compare with original values
-                                for (var key in currentValues) {
-                                    if (originalValues[key] !== currentValues[key]) {
+                                // For string values, use direct comparison
+                                if (typeof current === "string") {
+                                    if (original !== current) {
                                         hasChanges = true
+                                        console.log("String change detected for", key, ":", original, "->", current)
+                                        break
+                                    }
+                                } else {
+                                    // For numeric values, use tolerance to avoid floating point precision issues
+                                    var tolerance = 0.001
+                                    if (Math.abs(original - current) > tolerance) {
+                                        hasChanges = true
+                                        console.log("Numeric change detected for", key, ":", original, "->", current)
                                         break
                                     }
                                 }
+                            }
+                            
+                            if (hasChanges) {
+                                console.log("Profile values changed, updating database for ID:", profileData.id)
+                                console.log("Updating with values:", currentValues)
                                 
-                                if (hasChanges) {
-                                    console.log("Profile values changed, updating database for ID:", profileData.id)
-                                    // Call controller update method here when available
-                                    // For now, just refresh data
-                                    root.refreshData()
-                                    // Update original values
-                                    originalValues = currentValues
+                                // Call the controller's updateProfile method to save to database
+                                var success = profileController.updateProfile(
+                                    profileData.id,
+                                    currentValues.type,
+                                    currentValues.name,
+                                    currentValues.hw,
+                                    currentValues.tw,
+                                    currentValues.bfProfiles,
+                                    currentValues.tf,
+                                    currentValues.area,
+                                    currentValues.e,
+                                    currentValues.w,
+                                    currentValues.upperI,
+                                    currentValues.lowerL,
+                                    currentValues.tb,
+                                    currentValues.bfBrackets,
+                                    currentValues.tbf
+                                )
+                                
+                                if (success) {
+                                    console.log("Database update successful for profile ID:", profileData.id)
+                                    // Update original values for future comparisons
+                                    originalValues = Object.assign({}, currentValues)
                                 } else {
-                                    console.log("No changes detected for profile ID:", profileData.id, "- skipping update")
+                                    console.log("Database update failed for profile ID:", profileData.id)
+                                    if (profileController.lastError) {
+                                        console.log("Error details:", profileController.lastError)
+                                    }
                                 }
+                            } else {
+                                console.log("No changes detected for profile ID:", profileData.id, "- skipping update")
                             }
                         }
                         
                         // Initialize original values when component is created
                         Component.onCompleted: {
+                            // Set initial editing state to false during component creation
+                            isUserEditing = false
+                            
                             originalValues = {
                                 type: profileData.type || "",
                                 name: profileData.name || "",
@@ -907,6 +995,8 @@ Rectangle {
                                 bfBrackets: profileData.bfBrackets || 0,
                                 tbf: profileData.tbf || 0
                             }
+                            
+                            console.log("Row", rowIndex, "initialized with original values:", originalValues)
                         }
 
                         // Type - ComboBox
@@ -930,11 +1020,29 @@ Rectangle {
                                 onCurrentTextChanged: {
                                     console.log("Data row type changed to:", currentText, "for row", rowIndex)
                                     
-                                    // Use Qt.callLater to ensure all components are ready
-                                    Qt.callLater(function() {
-                                        updateProfileName()
-                                    })
+                                    // Skip during initial load
+                                    if (root.isInitialLoad) {
+                                        console.log("Skipping type change handling during initial load for row", rowIndex)
+                                        return
+                                    }
+                                    
+                                    // Update profileData with new type
+                                    var oldType = profileData.type || ""
+                                    profileData.type = currentText
+                                    
+                                    // Only trigger updates if the type actually changed
+                                    if (oldType !== currentText) {
+                                        console.log("Type actually changed from", oldType, "to", currentText)
+                                        isUserEditing = true
+                                        
+                                        // Use Qt.callLater to ensure all components are ready
+                                        Qt.callLater(function() {
+                                            updateProfileName()
+                                            handleEditingFinished()
+                                        })
+                                    }
                                 }
+                                
                             }
                         }
 
@@ -1009,7 +1117,7 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.name = text
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
                             }
                         }
@@ -1085,14 +1193,28 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.hw = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
+                                }
+                                
+                                onActiveFocusChanged: {
+                                    if (activeFocus) {
+                                        isUserEditing = true
+                                    }
+                                }
+                                
+                                onFocusChanged: {
+                                    if (!focus) {
+                                        isUserEditing = false
+                                    }
                                 }
                                 
                                 onTextChanged: {
-                                    // Auto-update name when hw value changes
-                                    Qt.callLater(function() {
-                                        updateProfileName()
-                                    })
+                                    // Auto-update name when hw value changes (only if user is editing)
+                                    if (!root.isInitialLoad && isUserEditing) {
+                                        Qt.callLater(function() {
+                                            updateProfileName()
+                                        })
+                                    }
                                 }
                             }
                         }
@@ -1168,14 +1290,28 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.tw = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
+                                }
+                                
+                                onActiveFocusChanged: {
+                                    if (activeFocus) {
+                                        isUserEditing = true
+                                    }
+                                }
+                                
+                                onFocusChanged: {
+                                    if (!focus) {
+                                        isUserEditing = false
+                                    }
                                 }
                                 
                                 onTextChanged: {
-                                    // Auto-update name when tw value changes
-                                    Qt.callLater(function() {
-                                        updateProfileName()
-                                    })
+                                    // Auto-update name when tw value changes (only if user is editing)
+                                    if (!root.isInitialLoad && isUserEditing) {
+                                        Qt.callLater(function() {
+                                            updateProfileName()
+                                        })
+                                    }
                                 }
                             }
                         }
@@ -1251,14 +1387,28 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.bfProfiles = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
+                                }
+                                
+                                onActiveFocusChanged: {
+                                    if (activeFocus) {
+                                        isUserEditing = true
+                                    }
+                                }
+                                
+                                onFocusChanged: {
+                                    if (!focus) {
+                                        isUserEditing = false
+                                    }
                                 }
                                 
                                 onTextChanged: {
-                                    // Update profile name when bf value changes
-                                    Qt.callLater(function() {
-                                        updateProfileName()
-                                    })
+                                    // Update profile name when bf value changes (only if user is editing)
+                                    if (!root.isInitialLoad && isUserEditing) {
+                                        Qt.callLater(function() {
+                                            updateProfileName()
+                                        })
+                                    }
                                 }
                             }
                         }
@@ -1334,14 +1484,28 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.tf = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
+                                }
+                                
+                                onActiveFocusChanged: {
+                                    if (activeFocus) {
+                                        isUserEditing = true
+                                    }
+                                }
+                                
+                                onFocusChanged: {
+                                    if (!focus) {
+                                        isUserEditing = false
+                                    }
                                 }
                                 
                                 onTextChanged: {
                                     // Update profile name when tf value changes
-                                    Qt.callLater(function() {
-                                        updateProfileName()
-                                    })
+                                    if (!root.isInitialLoad && isUserEditing) {
+                                        Qt.callLater(function() {
+                                            updateProfileName()
+                                        })
+                                    }
                                 }
                             }
                         }
@@ -1417,8 +1581,9 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.area = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
+                                
                             }
                         }
 
@@ -1493,8 +1658,9 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.e = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
+                                
                             }
                         }
 
@@ -1569,8 +1735,9 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.w = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
+                                
                             }
                         }
 
@@ -1645,8 +1812,9 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.upperI = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
+                                
                             }
                         }
 
@@ -1721,8 +1889,9 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.lowerL = parseInt(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
+                                
                                 
                             }
                         }
@@ -1798,8 +1967,9 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.tb = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
+                                
                             }
                         }
 
@@ -1874,8 +2044,9 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.bfBrackets = parseInt(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
+                                
                             }
                         }
 
@@ -1951,8 +2122,9 @@ Rectangle {
                                 onEditingFinished: {
                                     // Update the profileData with new value
                                     profileData.tbf = parseFloat(text) || 0
-                                    parent.parent.updateProfile()
+                                    handleEditingFinished()
                                 }
+                                
                             }
                         }
 
@@ -2078,6 +2250,13 @@ Rectangle {
                     
                     // Function untuk update shadow row values ketika type/dimension berubah
                     function updateShadowRowValues() {
+                        // Prevent recursive updates
+                        if (root.isUpdatingShadowRow) {
+                            console.log("Skipping updateShadowRowValues - already updating")
+                            return
+                        }
+                        
+                        root.isUpdatingShadowRow = true
                         console.log("updateShadowRowValues called")
                         
                         var newName = generateProfileName(
@@ -2124,6 +2303,11 @@ Rectangle {
                         shadowTbfField.text = bracketValues.tbf.toFixed(2)
                         
                         console.log("Shadow row updated - name:", newName, "area:", shadowAreaField.text, "e:", shadowEField.text, "w:", shadowWField.text, "upperI:", shadowUpperIField.text, "l:", shadowLowerLField.text, "tb:", shadowTbField.text, "bf:", shadowBfBracketsField.text, "tbf:", shadowTbfField.text)
+                        
+                        // Reset the flag after a short delay
+                        Qt.callLater(function() {
+                            root.isUpdatingShadowRow = false
+                        })
                     }
                     
                     Component.onCompleted: {
@@ -2154,9 +2338,11 @@ Rectangle {
                                 console.log("Shadow type changed to:", currentText)
                                 
                                 // Update name and calculated values automatically
-                                Qt.callLater(function() {
-                                    updateShadowRowValues()
-                                })
+                                if (!root.isUpdatingShadowRow) {
+                                    Qt.callLater(function() {
+                                        updateShadowRowValues()
+                                    })
+                                }
                             }
                         }
                     }
@@ -2289,9 +2475,11 @@ Rectangle {
                             
                             onTextChanged: {
                                 // Update name and calculated values when hw changes
-                                Qt.callLater(function() {
-                                    updateShadowRowValues()
-                                })
+                                if (!root.isUpdatingShadowRow) {
+                                    Qt.callLater(function() {
+                                        updateShadowRowValues()
+                                    })
+                                }
                             }
                         }
                     }
@@ -2360,9 +2548,11 @@ Rectangle {
                             
                             onTextChanged: {
                                 // Update name and calculated values when tw changes
-                                Qt.callLater(function() {
-                                    updateShadowRowValues()
-                                })
+                                if (!root.isUpdatingShadowRow) {
+                                    Qt.callLater(function() {
+                                        updateShadowRowValues()
+                                    })
+                                }
                             }
                         }
                     }
@@ -2431,9 +2621,11 @@ Rectangle {
                             
                             onTextChanged: {
                                 // Update name and calculated values when bf changes
-                                Qt.callLater(function() {
-                                    updateShadowRowValues()
-                                })
+                                if (!root.isUpdatingShadowRow) {
+                                    Qt.callLater(function() {
+                                        updateShadowRowValues()
+                                    })
+                                }
                             }
                         }
                     }
@@ -2502,9 +2694,11 @@ Rectangle {
                             
                             onTextChanged: {
                                 // Update name and calculated values when tf changes
-                                Qt.callLater(function() {
-                                    updateShadowRowValues()
-                                })
+                                if (!root.isUpdatingShadowRow) {
+                                    Qt.callLater(function() {
+                                        updateShadowRowValues()
+                                    })
+                                }
                             }
                         }
                     }
