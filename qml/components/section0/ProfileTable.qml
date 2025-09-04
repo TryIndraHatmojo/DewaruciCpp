@@ -2,6 +2,31 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
+/*
+ * PERFORMANCE OPTIMIZATIONS IMPLEMENTED:
+ * 
+ * 1. Initial Load Optimization:
+ *    - isInitialLoad flag prevents calculations during database load
+ *    - Only display data without expensive calculations on first load
+ * 
+ * 2. Event Handling Optimization:
+ *    - isUserEditing flag tracks real user interactions
+ *    - handleEditingFinished only runs when user actually edits
+ *    - Floating-point tolerance prevents unnecessary calculations
+ * 
+ * 3. CRUD Operations Optimization:
+ *    - updateSingleRow(): Updates only specific row by ID
+ *    - deleteSingleRow(): Removes only specific row by ID  
+ *    - addSingleRow(): Adds new row without full refresh
+ *    - All CRUD operations avoid full data reloads
+ *
+ * 4. Numeric Formatting Consistency:
+ *    - All calculations rounded to 2 decimal places for consistency
+ *    - formatToTwoDecimals(): Ensures consistent rounding in calculations
+ *    - formatDisplay(): Provides consistent display formatting
+ *    - UI and database use identical formatting (no rounding differences)
+ */
+
 Rectangle {
     id: root
     width: parent ? parent.width - 20 : 1200
@@ -18,6 +43,9 @@ Rectangle {
     
     // Flag untuk membedakan antara initial load dan user changes
     property bool isInitialLoad: true
+    
+    // Flag untuk prevent recursive shadow row updates
+    property bool isUpdatingShadowRow: false
     
     // Property untuk menyimpan lebar kolom yang dapat di-resize
     property var columnWidths: [
@@ -38,8 +66,9 @@ Rectangle {
         root.width * 0.05   // Action - 5%
     ]
 
-    // Function untuk refresh data dari database
+    // Function untuk refresh data dari database (hanya untuk initial load)
     function refreshData() {
+        isInitialLoad = true
         if (profileController) {
             profileController.refreshProfiles()
             // Convert profiles to table model
@@ -62,15 +91,151 @@ Rectangle {
         }
     }
 
+    // Function untuk update single row berdasarkan ID
+    function updateSingleRow(profileId) {
+        if (!profileController) {
+            console.log("Profile controller not available for single row update")
+            return
+        }
+        
+        console.log("Updating single row for profile ID:", profileId)
+        
+        // Get updated profile data from controller
+        var updatedProfile = profileController.getProfileById(profileId)
+        if (!updatedProfile) {
+            console.log("Profile with ID", profileId, "not found")
+            return
+        }
+        
+        // Find and update the row in tableModel
+        var found = false
+        var wasLastRow = false
+        for (var i = 0; i < tableModel.length; i++) {
+            if (tableModel[i].id === profileId) {
+                // Check if this is the last row before updating
+                wasLastRow = (i === tableModel.length - 1)
+                
+                tableModel[i] = updatedProfile
+                found = true
+                console.log("Updated row", i, "with new data for profile ID:", profileId)
+                break
+            }
+        }
+        
+        if (!found) {
+            console.log("Profile ID", profileId, "not found in current table model")
+            return
+        }
+        
+        // Trigger model update
+        tableModel = tableModel.slice() // Force array update
+        
+        // Auto-update shadow row dari data terbaru jika yang diupdate adalah baris terakhir
+        // atau jika setelah update ini menjadi baris terakhir
+        if (shadowRow && shadowRow.autoUpdateFromLastRow) {
+            var currentLastIndex = tableModel.length - 1
+            var updatedIsNowLast = false
+            
+            // Check if the updated profile is now the last row
+            for (var j = 0; j < tableModel.length; j++) {
+                if (tableModel[j].id === profileId && j === currentLastIndex) {
+                    updatedIsNowLast = true
+                    break
+                }
+            }
+            
+            // Update shadow row if the updated row was or is now the last row
+            if (wasLastRow || updatedIsNowLast) {
+                console.log("Updated row was/is last row, updating shadow row accordingly")
+                shadowRow.autoUpdateFromLastRow()
+            }
+        }
+    }
+
+    // Function untuk delete single row berdasarkan ID
+    function deleteSingleRow(profileId) {
+        console.log("Deleting single row for profile ID:", profileId)
+        
+        // Find and remove the row from tableModel
+        var newTableModel = []
+        var found = false
+        
+        for (var i = 0; i < tableModel.length; i++) {
+            if (tableModel[i].id !== profileId) {
+                newTableModel.push(tableModel[i])
+            } else {
+                found = true
+                console.log("Removed row", i, "for profile ID:", profileId)
+            }
+        }
+        
+        if (found) {
+            tableModel = newTableModel
+            console.log("Profile deleted. New table size:", tableModel.length)
+        } else {
+            console.log("Profile ID", profileId, "not found in current table model")
+        }
+    }
+
+    // Function untuk add single row 
+    function addSingleRow(newProfile) {
+        if (!newProfile || !newProfile.id) {
+            console.log("Invalid profile data for adding new row")
+            return
+        }
+        
+        console.log("Adding single row for new profile ID:", newProfile.id)
+        
+        // Check if profile already exists (avoid duplicates)
+        for (var i = 0; i < tableModel.length; i++) {
+            if (tableModel[i].id === newProfile.id) {
+                console.log("Profile ID", newProfile.id, "already exists, updating instead")
+                updateSingleRow(newProfile.id)
+                return
+            }
+        }
+        
+        // Add new profile to tableModel
+        var newTableModel = tableModel.slice() // Create copy
+        newTableModel.push(newProfile)
+        tableModel = newTableModel
+        
+        console.log("New profile added. New table size:", tableModel.length)
+        
+        // Auto-update shadow row dari data terbaru
+        if (shadowRow && shadowRow.autoUpdateFromLastRow) {
+            shadowRow.autoUpdateFromLastRow()
+        }
+    }
+
     // Load data when component is completed
     Component.onCompleted: {
         refreshData()
+    }
+    
+    // Watch for changes in tableModel to auto-update shadow row
+    onTableModelChanged: {
+        if (shadowRow && shadowRow.autoUpdateFromLastRow && tableModel.length > 0) {
+            shadowRow.autoUpdateFromLastRow()
+        }
     }
     
     // Helper function untuk focus + select all
     function focusAndSelect(targetInput) {
         targetInput.forceActiveFocus()
         targetInput.selectAll()
+    }
+
+    // Helper function untuk format angka ke 2 decimal places
+    function formatToTwoDecimals(value) {
+        var numValue = parseFloat(value) || 0
+        return Math.round(numValue * 100) / 100
+    }
+
+    // Helper function untuk format display dengan 2 decimal places
+    function formatDisplay(value) {
+        var numValue = parseFloat(value) || 0
+        return (Math.round(numValue * 100) / 100).toFixed(2)
     }
 
     // Function untuk generate name berdasarkan type dan dimensi
@@ -100,7 +265,7 @@ Rectangle {
     function calculateProfileValues(type, hw, tw, bfProfiles, tf) {
         if (!profileController) {
             console.log("ProfileController not available for calculation")
-            return {area: 0, e: 0, w: 0, upperI: 0}
+            return {area: 0.00, e: 0.00, w: 0.00, upperI: 0.00}
         }
         
         var thisHw = parseFloat(hw) || 0
@@ -112,13 +277,13 @@ Rectangle {
         // Only skip if essential dimensions are missing
         if (thisHw <= 0 || thisTw <= 0) {
             console.log("Skipping calculation - essential values missing (hw or tw):", thisHw, thisTw)
-            return {area: 0, e: 0, w: 0, upperI: 0}
+            return {area: 0.00, e: 0.00, w: 0.00, upperI: 0.00}
         }
         
         // For type L, we also need bf and tf
         if (thisType === "L" && (thisBf <= 0 || thisTf <= 0)) {
             console.log("Skipping calculation - L profile needs bf and tf:", thisBf, thisTf)
-            return {area: 0, e: 0, w: 0, upperI: 0}
+            return {area: 0.00, e: 0.00, w: 0.00, upperI: 0.00}
         }
         
         // For other types, ensure tf has a reasonable value
@@ -131,21 +296,22 @@ Rectangle {
         try {
             var result = profileController.countingFormula(thisHw, thisTw, thisBf, thisTf, thisType)
             if (result && result.length >= 4) {
+                // Round all values to 2 decimal places for consistency
                 var calculatedValues = {
-                    area: result[0],
-                    e: result[1], 
-                    w: result[2],
-                    upperI: result[3]
+                    area: Math.round(result[0] * 100) / 100,
+                    e: Math.round(result[1] * 100) / 100, 
+                    w: Math.round(result[2] * 100) / 100,
+                    upperI: Math.round(result[3] * 100) / 100
                 }
-                console.log("Calculated values:", calculatedValues)
+                console.log("Calculated values (rounded to 2 decimals):", calculatedValues)
                 return calculatedValues
             } else {
                 console.log("countingFormula returned invalid result:", result)
-                return {area: 0, e: 0, w: 0, upperI: 0}
+                return {area: 0.00, e: 0.00, w: 0.00, upperI: 0.00}
             }
         } catch (error) {
             console.log("Error calling countingFormula:", error.toString())
-            return {area: 0, e: 0, w: 0, upperI: 0}
+            return {area: 0.00, e: 0.00, w: 0.00, upperI: 0.00}
         }
     }
 
@@ -153,7 +319,7 @@ Rectangle {
     function calculateBracketValues(tw, w, rehProfiles, rehBrackets) {
         if (!profileController) {
             console.log("ProfileController not available for bracket calculation")
-            return {l: 0, tb: 0, bf: 0, tbf: 0}
+            return {l: 0.00, tb: 0.00, bf: 0.00, tbf: 0.00}
         }
         
         var thisTw = parseFloat(tw) || 0
@@ -164,7 +330,7 @@ Rectangle {
         // Skip calculation if essential values are missing
         if (thisTw <= 0 || thisW <= 0) {
             console.log("Skipping bracket calculation - essential values missing (tw or w):", thisTw, thisW)
-            return {l: 0, tb: 0, bf: 0, tbf: 0}
+            return {l: 0.00, tb: 0.00, bf: 0.00, tbf: 0.00}
         }
         
         console.log("Calling profileTableCountingFormulaBrackets with:", thisTw, thisW, thisRehProfiles, thisRehBrackets)
@@ -172,21 +338,22 @@ Rectangle {
         try {
             var result = profileController.profileTableCountingFormulaBrackets(thisTw, thisW, thisRehProfiles, thisRehBrackets)
             if (result && result.length >= 4) {
+                // Round all values to 2 decimal places for consistency
                 var calculatedValues = {
-                    l: result[0],
-                    tb: result[1],
-                    bf: result[2],
-                    tbf: result[3]
+                    l: Math.round(result[0] * 100) / 100,
+                    tb: Math.round(result[1] * 100) / 100,
+                    bf: Math.round(result[2] * 100) / 100,
+                    tbf: Math.round(result[3] * 100) / 100
                 }
-                console.log("Calculated bracket values:", calculatedValues)
+                console.log("Calculated bracket values (rounded to 2 decimals):", calculatedValues)
                 return calculatedValues
             } else {
                 console.log("profileTableCountingFormulaBrackets returned invalid result:", result)
-                return {l: 0, tb: 0, bf: 0, tbf: 0}
+                return {l: 0.00, tb: 0.00, bf: 0.00, tbf: 0.00}
             }
         } catch (error) {
             console.log("Error calling profileTableCountingFormulaBrackets:", error.toString())
-            return {l: 0, tb: 0, bf: 0, tbf: 0}
+            return {l: 0.00, tb: 0.00, bf: 0.00, tbf: 0.00}
         }
     }
 
@@ -215,31 +382,58 @@ Rectangle {
             return false
         }
         
-        console.log("Calling addNewProfile with parameters:", type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)
+        // Format all numeric values to 2 decimal places before saving
+        var formattedHw = formatToTwoDecimals(hw)
+        var formattedTw = formatToTwoDecimals(tw)
+        var formattedBfProfiles = formatToTwoDecimals(bfProfiles)
+        var formattedTf = formatToTwoDecimals(tf)
+        var formattedArea = formatToTwoDecimals(area)
+        var formattedE = formatToTwoDecimals(e)
+        var formattedW = formatToTwoDecimals(w)
+        var formattedUpperI = formatToTwoDecimals(upperI)
+        var formattedLowerL = formatToTwoDecimals(lowerL)
+        var formattedTb = formatToTwoDecimals(tb)
+        var formattedBfBrackets = formatToTwoDecimals(bfBrackets)
+        var formattedTbf = formatToTwoDecimals(tbf)
+        
+        console.log("Calling addNewProfile with formatted parameters:", type, name, 
+                   formattedHw, formattedTw, formattedBfProfiles, formattedTf, 
+                   formattedArea, formattedE, formattedW, formattedUpperI, 
+                   formattedLowerL, formattedTb, formattedBfBrackets, formattedTbf)
         
         try {
-            var success = profileController.addNewProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)
+            var success = profileController.addNewProfile(type, name, formattedHw, formattedTw, formattedBfProfiles, formattedTf, formattedArea, formattedE, formattedW, formattedUpperI, formattedLowerL, formattedTb, formattedBfBrackets, formattedTbf)
             if (success) {
                 console.log("New profile added successfully")
-                refreshData()
-                // Reset shadow row ke nilai dari data yang baru ditambahkan
+                
+                // Get the newly created profile from controller instead of full refresh
                 var newProfile = {
+                    id: profileController.lastInsertedId || Date.now(), // Fallback to timestamp if no ID
                     type: type,
                     name: name,
-                    hw: hw,
-                    tw: tw,
-                    bfProfiles: bfProfiles,
-                    tf: tf,
-                    area: area,
-                    e: e,
-                    w: w,
-                    upperI: upperI,
-                    lowerL: lowerL,
-                    tb: tb,
-                    bfBrackets: bfBrackets,
-                    tbf: tbf
+                    hw: formattedHw,
+                    tw: formattedTw,
+                    bfProfiles: formattedBfProfiles,
+                    tf: formattedTf,
+                    area: formattedArea,
+                    e: formattedE,
+                    w: formattedW,
+                    upperI: formattedUpperI,
+                    lowerL: formattedLowerL,
+                    tb: formattedTb,
+                    bfBrackets: formattedBfBrackets,
+                    tbf: formattedTbf
                 }
+                
+                // Add single row instead of full refresh
+                addSingleRow(newProfile)
+                
+                // Reset shadow row ke nilai dari data yang baru ditambahkan
                 shadowRow.resetToLastData(newProfile)
+                
+                // Reset manual name flag untuk entry berikutnya
+                shadowRow.isManualNameInput = false
+                
                 return true
             } else {
                 console.log("Failed to add profile")
@@ -258,12 +452,14 @@ Rectangle {
     function resetShadowRow() {
         if (profileController && tableModel.length > 0) {
             var lastProfile = tableModel[tableModel.length - 1]
+            console.log("Resetting shadow row to last profile:", lastProfile.name)
             shadowRow.resetToLastData(lastProfile)
         } else {
             // Set default values when no data is available
+            console.log("No data available, setting default shadow row values")
             shadowRow.resetToLastData({
                 type: "Bar",
-                name: "Bar Test",
+                name: "",  // Empty name untuk entry baru
                 hw: "400.0",
                 tw: "26.0",
                 bfProfiles: "85.0",
@@ -282,13 +478,19 @@ Rectangle {
 
     // Function untuk delete profile
     function deleteProfile(index, profileId) {
-        if (profileController) {
-            if (profileController.deleteProfile(profileId)) {
-                console.log("Profile deleted successfully")
-                refreshData()
-            } else {
-                console.log("Failed to delete profile")
-            }
+        if (!profileController) {
+            console.log("Profile controller not available")
+            return
+        }
+        
+        console.log("Deleting profile with ID:", profileId, "at index:", index)
+        
+        if (profileController.deleteProfile(profileId)) {
+            console.log("Profile deleted successfully from database")
+            // Delete single row instead of full refresh
+            deleteSingleRow(profileId)
+        } else {
+            console.log("Failed to delete profile from database")
         }
     }
 
@@ -420,7 +622,13 @@ Rectangle {
                     font.pixelSize: 9
                     onClicked: {
                         if (profileController) {
-                            profileController.clearAllProfiles()
+                            if (profileController.clearAllProfiles()) {
+                                console.log("All profiles cleared successfully")
+                                // Clear tableModel instead of full refresh
+                                tableModel = []
+                            } else {
+                                console.log("Failed to clear all profiles")
+                            }
                         }
                     }
                 }
@@ -429,7 +637,10 @@ Rectangle {
                     text: "Refresh"
                     Layout.preferredHeight: 20
                     font.pixelSize: 9
-                    onClicked: refreshData()
+                    onClicked: {
+                        console.log("Refresh button clicked - loading data from database")
+                        refreshData()
+                    }
                 }
             }
         }
@@ -963,6 +1174,36 @@ Rectangle {
                                     console.log("Database update successful for profile ID:", profileData.id)
                                     // Update original values for future comparisons
                                     originalValues = Object.assign({}, currentValues)
+                                    
+                                    // Check if this is the last row before updating
+                                    var wasLastRow = false
+                                    var lastRowId = root.tableModel.length > 0 ? root.tableModel[root.tableModel.length - 1].id : null
+                                    if (lastRowId === profileData.id) {
+                                        wasLastRow = true
+                                    }
+                                    
+                                    // Update tableModel locally to reflect changes immediately
+                                    for (var i = 0; i < root.tableModel.length; i++) {
+                                        if (root.tableModel[i].id === profileData.id) {
+                                            // Update the tableModel entry with new values
+                                            var updatedModel = root.tableModel.slice() // Create copy
+                                            updatedModel[i] = Object.assign({}, updatedModel[i], currentValues)
+                                            root.tableModel = updatedModel
+                                            console.log("TableModel updated locally for profile ID:", profileData.id)
+                                            
+                                            // Check if this row is now the last row after update
+                                            var isNowLastRow = (i === updatedModel.length - 1)
+                                            
+                                            // Update shadow row if this was/is the last row
+                                            if ((wasLastRow || isNowLastRow) && shadowRow && shadowRow.autoUpdateFromLastRow) {
+                                                console.log("Row", i, "was/is last row, updating shadow row from updated data")
+                                                Qt.callLater(function() {
+                                                    shadowRow.autoUpdateFromLastRow()
+                                                })
+                                            }
+                                            break
+                                        }
+                                    }
                                 } else {
                                     console.log("Database update failed for profile ID:", profileData.id)
                                     if (profileController.lastError) {
@@ -1134,7 +1375,7 @@ Rectangle {
                                 id: hwInput
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                text: profileData.hw ? profileData.hw.toFixed(1) : ""
+                                text: profileData.hw ? profileData.hw.toFixed(2) : ""
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
@@ -1231,7 +1472,7 @@ Rectangle {
                                 id: twInput
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                text: profileData.tw ? profileData.tw.toFixed(1) : ""
+                                text: profileData.tw ? profileData.tw.toFixed(2) : ""
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
@@ -1328,7 +1569,7 @@ Rectangle {
                                 id: bfProfilesInput
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                text: profileData.bfProfiles ? profileData.bfProfiles.toFixed(1) : ""
+                                text: profileData.bfProfiles ? profileData.bfProfiles.toFixed(2) : ""
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
@@ -1425,7 +1666,7 @@ Rectangle {
                                 id: tfInput
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                text: profileData.tf ? profileData.tf.toFixed(1) : ""
+                                text: profileData.tf ? profileData.tf.toFixed(2) : ""
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
@@ -1830,7 +2071,7 @@ Rectangle {
                                 id: lowerLInput
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                text: profileData.lowerL ? profileData.lowerL.toFixed(0) : ""
+                                text: profileData.lowerL ? profileData.lowerL.toFixed(2) : ""
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
@@ -1908,7 +2149,7 @@ Rectangle {
                                 id: tbInput
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                text: profileData.tb ? profileData.tb.toFixed(1) : ""
+                                text: profileData.tb ? profileData.tb.toFixed(2) : ""
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
@@ -1985,7 +2226,7 @@ Rectangle {
                                 id: bfBracketsInput
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                text: profileData.bfBrackets ? profileData.bfBrackets.toFixed(0) : ""
+                                text: profileData.bfBrackets ? profileData.bfBrackets.toFixed(2) : ""
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
@@ -2062,7 +2303,7 @@ Rectangle {
                                 id: tbfInput
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                text: profileData.tbf ? profileData.tbf.toFixed(1) : ""
+                                text: profileData.tbf ? profileData.tbf.toFixed(2) : ""
                                 font.pixelSize: 10
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
@@ -2228,16 +2469,35 @@ Rectangle {
                 Row {
                     id: shadowRow
                     
+                    // Property untuk tracking changes
+                    property bool autoUpdateEnabled: true
+                    property bool isInitializing: false
+                    property bool isManualNameInput: false  // Track if user manually typed name
+                    
                     function resetToLastData(lastProfile) {
+                        isInitializing = true
+                        
                         var typeValue = lastProfile.type || "Bar"
                         var typeIndex = shadowTypeField.model.indexOf(typeValue)
                         shadowTypeField.currentIndex = typeIndex >= 0 ? typeIndex : 3 // Default to "Bar" if not found
                         
-                        shadowNameField.text = lastProfile.name || ""  // Show name from last entry
+                        // Copy dimensions dari profile terakhir
                         shadowHwField.text = lastProfile.hw ? lastProfile.hw.toString() : "0"
                         shadowTwField.text = lastProfile.tw ? lastProfile.tw.toString() : "0"
                         shadowBfProfilesField.text = lastProfile.bfProfiles ? lastProfile.bfProfiles.toString() : "0"
                         shadowTfField.text = lastProfile.tf ? lastProfile.tf.toString() : "0"
+                        
+                        // Generate name berdasarkan type dan dimensions yang sudah dicopy
+                        var generatedName = generateProfileName(
+                            typeValue,
+                            shadowHwField.text,
+                            shadowTwField.text,
+                            shadowBfProfilesField.text,
+                            shadowTfField.text
+                        )
+                        shadowNameField.text = generatedName
+                        
+                        // Set calculated fields dari lastProfile
                         shadowAreaField.text = lastProfile.area ? lastProfile.area.toString() : "0"
                         shadowEField.text = lastProfile.e ? lastProfile.e.toString() : "0"
                         shadowWField.text = lastProfile.w ? lastProfile.w.toString() : "0"
@@ -2246,6 +2506,47 @@ Rectangle {
                         shadowTbField.text = lastProfile.tb ? lastProfile.tb.toString() : "0"
                         shadowBfBracketsField.text = lastProfile.bfBrackets ? lastProfile.bfBrackets.toString() : "0"
                         shadowTbfField.text = lastProfile.tbf ? lastProfile.tbf.toString() : "0"
+                        
+                        // Reset manual name input flag karena name sudah digenerate
+                        isManualNameInput = false
+                        isInitializing = false
+                        
+                        // Trigger automatic calculation after copy
+                        shadowRow.updateShadowRowValues()
+                    }
+                    
+                    // Function untuk auto-update shadow row dari data terbaru
+                    function autoUpdateFromLastRow() {
+                        if (!autoUpdateEnabled || isInitializing || tableModel.length === 0) {
+                            return
+                        }
+                        
+                        console.log("Auto-updating shadow row from last data entry")
+                        var lastProfile = tableModel[tableModel.length - 1]
+                        
+                        // Copy semua data termasuk type dan dimensions
+                        var typeValue = lastProfile.type || "Bar"
+                        var typeIndex = shadowTypeField.model.indexOf(typeValue)
+                        if (shadowTypeField.currentIndex !== typeIndex) {
+                            shadowTypeField.currentIndex = typeIndex >= 0 ? typeIndex : 3
+                        }
+                        
+                        // Update dimensions jika berbeda
+                        if (shadowHwField.text !== lastProfile.hw.toString()) {
+                            shadowHwField.text = lastProfile.hw ? lastProfile.hw.toString() : "0"
+                        }
+                        if (shadowTwField.text !== lastProfile.tw.toString()) {
+                            shadowTwField.text = lastProfile.tw ? lastProfile.tw.toString() : "0"
+                        }
+                        if (shadowBfProfilesField.text !== lastProfile.bfProfiles.toString()) {
+                            shadowBfProfilesField.text = lastProfile.bfProfiles ? lastProfile.bfProfiles.toString() : "0"
+                        }
+                        if (shadowTfField.text !== lastProfile.tf.toString()) {
+                            shadowTfField.text = lastProfile.tf ? lastProfile.tf.toString() : "0"
+                        }
+                        
+                        // Always update name dan calculated values berdasarkan dimensions terbaru
+                        shadowRow.updateShadowRowValues()
                     }
                     
                     // Function untuk update shadow row values ketika type/dimension berubah
@@ -2259,6 +2560,7 @@ Rectangle {
                         root.isUpdatingShadowRow = true
                         console.log("updateShadowRowValues called")
                         
+                        // Always generate and update name berdasarkan type dan dimensions
                         var newName = generateProfileName(
                             shadowTypeField.currentText,
                             shadowHwField.text,
@@ -2267,7 +2569,11 @@ Rectangle {
                             shadowTfField.text
                         )
                         
+                        console.log("Generated shadow name:", newName)
                         shadowNameField.text = newName
+                        
+                        // Reset manual name input flag karena name sudah digenerate otomatis
+                        isManualNameInput = false
                         
                         // Calculate and update area, e, w, upperI using countingFormula
                         var calculatedValues = calculateProfileValues(
@@ -2340,7 +2646,7 @@ Rectangle {
                                 // Update name and calculated values automatically
                                 if (!root.isUpdatingShadowRow) {
                                     Qt.callLater(function() {
-                                        updateShadowRowValues()
+                                        shadowRow.updateShadowRowValues()
                                     })
                                 }
                             }
@@ -2407,6 +2713,21 @@ Rectangle {
                             Keys.onReturnPressed: {
                                 // Add new profile when Enter is pressed
                                 saveMouseArea.clicked()
+                            }
+                            
+                            onTextChanged: {
+                                // Track manual name input hanya jika bukan dari automatic update
+                                if (!shadowRow.isInitializing && !root.isUpdatingShadowRow) {
+                                    shadowRow.isManualNameInput = true
+                                    console.log("Manual name input detected:", text)
+                                }
+                            }
+                            
+                            onActiveFocusChanged: {
+                                // Reset manual flag when focus changes away
+                                if (!activeFocus && text === "") {
+                                    shadowRow.isManualNameInput = false
+                                }
                             }
                         }
                     }
@@ -2477,7 +2798,7 @@ Rectangle {
                                 // Update name and calculated values when hw changes
                                 if (!root.isUpdatingShadowRow) {
                                     Qt.callLater(function() {
-                                        updateShadowRowValues()
+                                        shadowRow.updateShadowRowValues()
                                     })
                                 }
                             }
@@ -2550,7 +2871,7 @@ Rectangle {
                                 // Update name and calculated values when tw changes
                                 if (!root.isUpdatingShadowRow) {
                                     Qt.callLater(function() {
-                                        updateShadowRowValues()
+                                        shadowRow.updateShadowRowValues()
                                     })
                                 }
                             }
@@ -2623,7 +2944,7 @@ Rectangle {
                                 // Update name and calculated values when bf changes
                                 if (!root.isUpdatingShadowRow) {
                                     Qt.callLater(function() {
-                                        updateShadowRowValues()
+                                        shadowRow.updateShadowRowValues()
                                     })
                                 }
                             }
@@ -2696,7 +3017,7 @@ Rectangle {
                                 // Update name and calculated values when tf changes
                                 if (!root.isUpdatingShadowRow) {
                                     Qt.callLater(function() {
-                                        updateShadowRowValues()
+                                        shadowRow.updateShadowRowValues()
                                     })
                                 }
                             }

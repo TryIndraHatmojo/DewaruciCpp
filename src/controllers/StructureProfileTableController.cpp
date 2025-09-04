@@ -8,6 +8,7 @@ StructureProfileTableController::StructureProfileTableController(QObject *parent
     : QObject(parent)
     , m_model(nullptr)
     , m_isLoading(false)
+    , m_lastInsertedId(0)
 {
     m_model = new StructureProfileTable(this);
     
@@ -38,6 +39,11 @@ bool StructureProfileTableController::isLoading() const
     return m_isLoading;
 }
 
+int StructureProfileTableController::lastInsertedId() const
+{
+    return m_lastInsertedId;
+}
+
 // CRUD Operations
 bool StructureProfileTableController::createProfile(const QString& type, const QString& name, 
                                      double hw, double tw, double bfProfiles, double tf,
@@ -46,6 +52,20 @@ bool StructureProfileTableController::createProfile(const QString& type, const Q
 {
     setIsLoading(true);
     setLastError("");
+    
+    // Round all numeric values to 2 decimal places for consistency
+    hw = std::round(hw * 100.0) / 100.0;
+    tw = std::round(tw * 100.0) / 100.0;
+    bfProfiles = std::round(bfProfiles * 100.0) / 100.0;
+    tf = std::round(tf * 100.0) / 100.0;
+    area = std::round(area * 100.0) / 100.0;
+    e = std::round(e * 100.0) / 100.0;
+    w = std::round(w * 100.0) / 100.0;
+    upperI = std::round(upperI * 100.0) / 100.0;
+    lowerL = std::round(lowerL * 100.0) / 100.0;
+    tb = std::round(tb * 100.0) / 100.0;
+    bfBrackets = std::round(bfBrackets * 100.0) / 100.0;
+    tbf = std::round(tbf * 100.0) / 100.0;
     
     // Validate input data
     if (!validateProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)) {
@@ -80,6 +100,20 @@ bool StructureProfileTableController::updateProfile(int id, const QString& type,
 {
     setIsLoading(true);
     setLastError("");
+    
+    // Round all numeric values to 2 decimal places for consistency
+    hw = std::round(hw * 100.0) / 100.0;
+    tw = std::round(tw * 100.0) / 100.0;
+    bfProfiles = std::round(bfProfiles * 100.0) / 100.0;
+    tf = std::round(tf * 100.0) / 100.0;
+    area = std::round(area * 100.0) / 100.0;
+    e = std::round(e * 100.0) / 100.0;
+    w = std::round(w * 100.0) / 100.0;
+    upperI = std::round(upperI * 100.0) / 100.0;
+    lowerL = std::round(lowerL * 100.0) / 100.0;
+    tb = std::round(tb * 100.0) / 100.0;
+    bfBrackets = std::round(bfBrackets * 100.0) / 100.0;
+    tbf = std::round(tbf * 100.0) / 100.0;
     
     // Validate input data
     if (!validateProfile(type, name, hw, tw, bfProfiles, tf, area, e, w, upperI, lowerL, tb, bfBrackets, tbf)) {
@@ -356,6 +390,7 @@ void StructureProfileTableController::initialize()
 // Private slots
 void StructureProfileTableController::onProfileInserted(int id)
 {
+    setLastInsertedId(id);
     emit profileCreated(id);
     refreshProfiles();
 }
@@ -395,6 +430,14 @@ void StructureProfileTableController::setIsLoading(bool loading)
     if (m_isLoading != loading) {
         m_isLoading = loading;
         emit isLoadingChanged();
+    }
+}
+
+void StructureProfileTableController::setLastInsertedId(int id)
+{
+    if (m_lastInsertedId != id) {
+        m_lastInsertedId = id;
+        emit lastInsertedIdChanged();
     }
 }
 
@@ -587,6 +630,14 @@ QVariantList StructureProfileTableController::countingFormula(double hw, double 
     
     qDebug() << "counting_formula" << area << e << w << upper_i;
     
+    // Round all results to 2 decimal places for consistency
+    area = std::round(area * 100.0) / 100.0;
+    e = std::round(e * 100.0) / 100.0;
+    w = std::round(w * 100.0) / 100.0;
+    upper_i = std::round(upper_i * 100.0) / 100.0;
+    
+    qDebug() << "counting_formula (rounded)" << area << e << w << upper_i;
+    
     QVariantList result;
     result << area << e << w << upper_i;
     return result;
@@ -699,6 +750,14 @@ QVariantList StructureProfileTableController::countingFormulaEdit(double hw, dou
     
     qDebug() << "counting_formula_edit" << final_area << final_e << final_w << final_upperI;
     
+    // Round all results to 2 decimal places for consistency
+    final_area = std::round(final_area * 100.0) / 100.0;
+    final_e = std::round(final_e * 100.0) / 100.0;
+    final_w = std::round(final_w * 100.0) / 100.0;
+    final_upperI = std::round(final_upperI * 100.0) / 100.0;
+    
+    qDebug() << "counting_formula_edit (rounded)" << final_area << final_e << final_w << final_upperI;
+    
     QVariantList result;
     result << final_area << final_e << final_w << final_upperI;
     return result;
@@ -777,6 +836,14 @@ QVariantList StructureProfileTableController::profileTableCountingFormulaBracket
     double tbf_result = static_cast<double>(tbf);
     
     qDebug() << "profile_table_counting_formula_brackets" << l_result << tb_result << bf_result << tbf_result;
+    
+    // Round all results to 2 decimal places for consistency
+    l_result = std::round(l_result * 100.0) / 100.0;
+    tb_result = std::round(tb_result * 100.0) / 100.0;
+    bf_result = std::round(bf_result * 100.0) / 100.0;
+    tbf_result = std::round(tbf_result * 100.0) / 100.0;
+    
+    qDebug() << "profile_table_counting_formula_brackets (rounded)" << l_result << tb_result << bf_result << tbf_result;
     
     QVariantList result;
     result << l_result << tb_result << bf_result << tbf_result;
@@ -872,6 +939,14 @@ QVariantList StructureProfileTableController::profileTableCountingFormulaBracket
     }
     
     qDebug() << "profile_table_counting_formula_brackets_edit" << final_l << final_tb << final_bf << final_tbf;
+    
+    // Round all results to 2 decimal places for consistency
+    final_l = std::round(final_l * 100.0) / 100.0;
+    final_tb = std::round(final_tb * 100.0) / 100.0;
+    final_bf = std::round(final_bf * 100.0) / 100.0;
+    final_tbf = std::round(final_tbf * 100.0) / 100.0;
+    
+    qDebug() << "profile_table_counting_formula_brackets_edit (rounded)" << final_l << final_tb << final_bf << final_tbf;
     
     QVariantList result;
     result << final_l << final_tb << final_bf << final_tbf;

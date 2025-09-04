@@ -13,6 +13,7 @@ class StructureProfileTableController : public QObject
     Q_PROPERTY(QVariantList profilesData READ getProfilesData NOTIFY profilesDataChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool isLoading READ isLoading NOTIFY isLoadingChanged)
+    Q_PROPERTY(int lastInsertedId READ lastInsertedId NOTIFY lastInsertedIdChanged)
 
 public:
     explicit StructureProfileTableController(QObject *parent = nullptr);
@@ -22,6 +23,7 @@ public:
     QVariantList getProfilesData() const;
     QString lastError() const;
     bool isLoading() const;
+    int lastInsertedId() const;
     
     // CRUD Operations accessible from QML
     Q_INVOKABLE bool createProfile(const QString& type, const QString& name, 
@@ -91,6 +93,7 @@ signals:
     void profilesDataChanged();
     void lastErrorChanged();
     void isLoadingChanged();
+    void lastInsertedIdChanged();
     void profileCreated(int id);
     void profileUpdated(int id);
     void profileDeleted(int id);
@@ -107,10 +110,12 @@ private:
     QVariantList m_profiles;
     QString m_lastError;
     bool m_isLoading;
+    int m_lastInsertedId;
     
     // Helper methods
     void setLastError(const QString& error);
     void setIsLoading(bool loading);
+    void setLastInsertedId(int id);
     void loadProfilesFromModel();
     QVariantMap profileDataToVariantMap(const ProfileData& profile);
     bool isValidProfileData(const QString& type, const QString& name,
