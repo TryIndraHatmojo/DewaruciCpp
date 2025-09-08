@@ -11,9 +11,13 @@ qt_standard_project_setup(REQUIRES 6.8)
 qt_add_executable(appDewaruciCpp
     main.cpp
     src/database/DatabaseConnection.cpp
+    src/database/DatabaseShipConnection.cpp
     src/database/models/LinearIsotropicMaterials.cpp
     src/database/models/StructureProfileTable.cpp
+    src/database/models/FrameArrangementXZ.cpp
+    src/database/models/FrameArrangementYZ.cpp
     src/controllers/StructureProfileTableController.cpp
+    src/controllers/FrameArrangementXZController.cpp
 )
 
 qt_add_qml_module(appDewaruciCpp
