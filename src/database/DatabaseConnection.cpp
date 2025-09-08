@@ -29,7 +29,7 @@ bool DatabaseConnection::initialize()
     // Setup SQLite database
     m_database = QSqlDatabase::addDatabase("QSQLITE", "MainConnection");
     
-    // Set database path to project folder database/dewaruci.db
+    // Set database path to project folder data/dewaruci.db
     QString appDirPath = QCoreApplication::applicationDirPath();
     QString projectRoot;
     
@@ -50,7 +50,7 @@ bool DatabaseConnection::initialize()
         projectRoot = appDirPath;
     }
     
-    QString dbPath = QDir(projectRoot).absoluteFilePath("src/database/dewaruci.db");
+    QString dbPath = QDir(projectRoot).absoluteFilePath("data/dewaruci.db");
     
     // Create database directory if it doesn't exist
     QDir dbDir = QFileInfo(dbPath).absoluteDir();

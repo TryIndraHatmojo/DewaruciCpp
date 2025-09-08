@@ -156,7 +156,7 @@ QObject::connect(&MaterialDatabase::instance(), &MaterialDatabase::error,
 
 ## File Database
 
-Database SQLite akan dibuat di: `src/database/dewaruci.db` (relative to project root)
+Database SQLite akan dibuat di: `data/dewaruci.db` (relative to project root)
 
 ## Error Handling
 
