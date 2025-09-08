@@ -1658,6 +1658,7 @@ Rectangle {
 
                         property var originalValues: ({}) // Store original values for comparison
                         property bool isUserEditing: false // Flag to track user editing
+                        property bool isManualNameInput: false // Flag to track manual name input
                         
                         // Function to update name based on current field values
                         function updateProfileName() {
@@ -1667,10 +1668,41 @@ Rectangle {
                                 return
                             }
                             
+                            // Skip if user has manually input the name
+                            if (isManualNameInput) {
+                                console.log("Skipping name generation - user has manually input name for row", rowIndex)
+                                // Still calculate other values but don't update name
+                                calculateAndUpdateFields()
+                                return
+                            }
+                            
                             console.log("updateProfileName called for row", rowIndex)
                             
                             var typeField = children[0].children[0] // ComboBox
                             var nameField = children[1].children[0] // Name TextInput
+                            var hwField = children[2].children[0] // hw TextInput  
+                            var twField = children[3].children[0] // tw TextInput
+                            var bfField = children[4].children[0] // bf TextInput
+                            var tfField = children[5].children[0] // tf TextInput
+                            
+                            var newName = generateProfileName(
+                                typeField.currentText,
+                                hwField.text,
+                                twField.text,
+                                bfField.text,
+                                tfField.text
+                            )
+                            
+                            console.log("Generated name:", newName, "for type:", typeField.currentText)
+                            nameField.text = newName
+                            
+                            // Calculate and update other fields
+                            calculateAndUpdateFields()
+                        }
+                        
+                        // Function to calculate and update area, e, w, upperI and bracket values
+                        function calculateAndUpdateFields() {
+                            var typeField = children[0].children[0] // ComboBox
                             var hwField = children[2].children[0] // hw TextInput  
                             var twField = children[3].children[0] // tw TextInput
                             var bfField = children[4].children[0] // bf TextInput
@@ -1683,16 +1715,6 @@ Rectangle {
                             var tbField = children[11].children[0] // tb TextInput
                             var bfBracketsField = children[12].children[0] // bfBrackets TextInput
                             var tbfField = children[13].children[0] // tbf TextInput
-                            
-                            var newName = generateProfileName(
-                                typeField.currentText,
-                                hwField.text,
-                                twField.text,
-                                bfField.text,
-                                tfField.text
-                            )
-                            
-                            nameField.text = newName
                             
                             // Calculate and update area, e, w, upperI using countingFormula
                             var calculatedValues = calculateProfileValues(
@@ -1924,7 +1946,7 @@ Rectangle {
                                 anchors.centerIn: parent
                                 width: parent.width - 4
                                 height: 25
-                                model: ["HP", "L", "T", "Bar"]
+                                model: ["HP", "L", "Bar"]
                                 currentIndex: {
                                     var type = profileData.type || "Bar"
                                     return model.indexOf(type)
@@ -1947,6 +1969,9 @@ Rectangle {
                                     if (oldType !== currentText) {
                                         console.log("Type actually changed from", oldType, "to", currentText)
                                         isUserEditing = true
+                                        
+                                        // Reset manual name input flag when type changes so name can be auto-generated
+                                        isManualNameInput = false
                                         
                                         // Use Qt.callLater to ensure all components are ready
                                         Qt.callLater(function() {
@@ -2031,6 +2056,22 @@ Rectangle {
                                     // Update the profileData with new value
                                     profileData.name = text
                                     handleEditingFinished()
+                                }
+                                
+                                onTextChanged: {
+                                    // Track manual name input only if not during initial load or automatic update
+                                    if (!root.isInitialLoad && isUserEditing) {
+                                        isManualNameInput = true
+                                        console.log("Manual name input detected for row", rowIndex, ":", text)
+                                    }
+                                }
+                                
+                                onActiveFocusChanged: {
+                                    // Reset manual flag when focus changes away and name is empty
+                                    if (!activeFocus && text === "") {
+                                        isManualNameInput = false
+                                        console.log("Reset manual name flag for row", rowIndex)
+                                    }
                                 }
                             }
                         }
@@ -3360,7 +3401,7 @@ Rectangle {
                             anchors.centerIn: parent
                             width: parent.width - 4
                             height: 25
-                            model: ["HP", "L", "T", "Bar"]
+                            model: ["HP", "L", "Bar"]
                             currentIndex: 3 // Default to "Bar"
                             font.pixelSize: 9
                             

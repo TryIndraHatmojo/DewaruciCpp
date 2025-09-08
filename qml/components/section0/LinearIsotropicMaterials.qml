@@ -14,6 +14,22 @@ Rectangle {
 
     property var tableModel: []
     
+    // Flag untuk prevent automatic recalculation during manual resize
+    property bool isManuallyResizing: false
+    
+    // Timer untuk debounce resize calculations
+    Timer {
+        id: resizeTimer
+        interval: 16 // ~60 FPS untuk smooth update
+        running: false
+        repeat: false
+        onTriggered: {
+            if (!isManuallyResizing) {
+                adjustColumnWidths()
+            }
+        }
+    }
+    
     // Property untuk menyimpan lebar kolom yang dapat di-resize
     property var columnWidths: [
         root.width * 0.10,  // Mat. No. - 10%
@@ -26,83 +42,114 @@ Rectangle {
         root.width * 0.11   // Action - 11%
     ]
     
-    // Function untuk memastikan total lebar kolom tidak melebihi container
+    // Function untuk memastikan total lebar kolom selalu sama dengan parent width
     function adjustColumnWidths() {
+        var targetWidth = root.width - 4  // -4 untuk margin
         var totalWidth = 0
+        var minWidth = 50
+        
+        // Calculate current total width
         for (var i = 0; i < columnWidths.length; i++) {
             totalWidth += columnWidths[i]
         }
         
-        // Jika total melebihi lebar container, scale down proportionally
-        if (totalWidth > root.width - 4) {  // -4 untuk margin
-            var scaleFactor = (root.width - 4) / totalWidth
-            for (var j = 0; j < columnWidths.length; j++) {
-                columnWidths[j] = columnWidths[j] * scaleFactor
+        // If total width doesn't match target (with 1px tolerance)
+        if (Math.abs(totalWidth - targetWidth) > 1) {
+            // Recalculate proportionally while respecting minimum widths
+            var newColumnWidths = [
+                targetWidth * 0.10,  // Mat. No. - 10%
+                targetWidth * 0.12,  // E-Mod - 12%
+                targetWidth * 0.12,  // G-Mod - 12%
+                targetWidth * 0.12,  // Density - 12%
+                targetWidth * 0.12,  // Y. Stress - 12%
+                targetWidth * 0.12,  // Tensile S. - 12%
+                targetWidth * 0.19,  // Remark - 19%
+                targetWidth * 0.11   // Action - 11%
+            ]
+            
+            // Apply minimum width constraints
+            for (var j = 0; j < newColumnWidths.length; j++) {
+                if (newColumnWidths[j] < minWidth) {
+                    newColumnWidths[j] = minWidth
+                }
             }
+            
+            // If minimum constraints cause overflow, scale down proportionally
+            var totalAfterMin = 0
+            for (var k = 0; k < newColumnWidths.length; k++) {
+                totalAfterMin += newColumnWidths[k]
+            }
+            
+            if (totalAfterMin > targetWidth) {
+                var scaleFactor = targetWidth / totalAfterMin
+                for (var l = 0; l < newColumnWidths.length; l++) {
+                    var scaledWidth = newColumnWidths[l] * scaleFactor
+                    newColumnWidths[l] = Math.max(scaledWidth, minWidth)
+                }
+            }
+            
+            columnWidths = newColumnWidths
         }
     }
     
-    // Function untuk resize kolom dengan penyesuaian otomatis kolom lain
+    // Function untuk resize kolom dengan mempertahankan total lebar sama dengan parent
     function resizeColumn(columnIndex, newWidth) {
         var minWidth = 50  // Lebar minimum untuk setiap kolom
-        var maxContainerWidth = root.width - 4  // Total lebar yang tersedia
+        var targetTotalWidth = root.width - 4  // Total lebar yang harus dipertahankan
         
         // Pastikan newWidth tidak kurang dari minimum
         newWidth = Math.max(minWidth, newWidth)
         
-        var newWidths = root.columnWidths.slice()  // Copy array
-        var oldWidth = newWidths[columnIndex]
-        var widthDifference = newWidth - oldWidth
-        
-        // Jika tidak ada perubahan, return
-        if (Math.abs(widthDifference) < 1) {
-            return
+        // Calculate current total width
+        var currentTotal = 0
+        for (var i = 0; i < columnWidths.length; i++) {
+            currentTotal += columnWidths[i]
         }
         
-        // Update kolom yang di-resize
-        newWidths[columnIndex] = newWidth
+        // Calculate the difference from changing this column
+        var widthDifference = newWidth - columnWidths[columnIndex]
+        var newTotal = currentTotal + widthDifference
         
-        // Hitung sisa space yang tersedia untuk kolom lain
-        var remainingWidth = maxContainerWidth - newWidth
-        var otherColumnsCount = newWidths.length - 1
+        var newColumnWidths = columnWidths.slice()
+        newColumnWidths[columnIndex] = newWidth
         
-        if (otherColumnsCount > 0 && remainingWidth > 0) {
-            // Hitung total lebar kolom lain saat ini
-            var currentOtherColumnsWidth = 0
-            for (var i = 0; i < newWidths.length; i++) {
-                if (i !== columnIndex) {
-                    currentOtherColumnsWidth += newWidths[i]
+        // If total width doesn't match target, redistribute the difference to other columns
+        if (Math.abs(newTotal - targetTotalWidth) > 1) { // 1px tolerance
+            var redistributionAmount = targetTotalWidth - newTotal
+            var redistributableColumns = []
+            
+            // Find columns that can be redistributed (excluding the column being resized)
+            for (var j = 0; j < newColumnWidths.length; j++) {
+                if (j !== columnIndex) {
+                    redistributableColumns.push(j)
                 }
             }
             
-            // Jika ada space untuk kolom lain
-            if (currentOtherColumnsWidth > 0) {
-                // Distribute remaining width proportionally
-                var scale = remainingWidth / currentOtherColumnsWidth
+            if (redistributableColumns.length > 0) {
+                var amountPerColumn = redistributionAmount / redistributableColumns.length
                 
-                for (var j = 0; j < newWidths.length; j++) {
-                    if (j !== columnIndex) {
-                        var scaledWidth = newWidths[j] * scale
-                        newWidths[j] = Math.max(minWidth, scaledWidth)
-                    }
-                }
-            } else {
-                // Jika kolom lain tidak ada lebar, bagi rata
-                var averageWidth = Math.max(minWidth, remainingWidth / otherColumnsCount)
-                for (var k = 0; k < newWidths.length; k++) {
-                    if (k !== columnIndex) {
-                        newWidths[k] = averageWidth
-                    }
+                // Redistribute the difference among other columns
+                for (var k = 0; k < redistributableColumns.length; k++) {
+                    var colIndex = redistributableColumns[k]
+                    var newColWidth = newColumnWidths[colIndex] + amountPerColumn
+                    
+                    // Ensure the redistributed width doesn't go below minimum
+                    newColumnWidths[colIndex] = Math.max(newColWidth, minWidth)
                 }
             }
         }
         
         // Update columnWidths
-        root.columnWidths = newWidths
+        root.columnWidths = newColumnWidths
     }
     
-    // Panggil adjustColumnWidths ketika ukuran berubah
-    onWidthChanged: adjustColumnWidths()
+    // Handler untuk auto-recalculate column widths ketika table width berubah
+    onWidthChanged: {
+        if (width > 0 && !isManuallyResizing) {
+            // Use timer to debounce rapid resize events
+            resizeTimer.restart()
+        }
+    }
 
     // Component.onCompleted untuk load data dari database
     Component.onCompleted: {
@@ -281,8 +328,13 @@ Rectangle {
                         property real startWidth
                         
                         onPressed: {
+                            isManuallyResizing = true
                             startX = mouse.x
                             startWidth = parent.parent.width
+                        }
+                        
+                        onReleased: {
+                            isManuallyResizing = false
                         }
                         
                         onPositionChanged: {
@@ -327,8 +379,13 @@ Rectangle {
                         property real startWidth
                         
                         onPressed: {
+                            isManuallyResizing = true
                             startX = mouse.x
                             startWidth = parent.parent.width
+                        }
+                        
+                        onReleased: {
+                            isManuallyResizing = false
                         }
                         
                         onPositionChanged: {
@@ -373,8 +430,13 @@ Rectangle {
                         property real startWidth
                         
                         onPressed: {
+                            isManuallyResizing = true
                             startX = mouse.x
                             startWidth = parent.parent.width
+                        }
+                        
+                        onReleased: {
+                            isManuallyResizing = false
                         }
                         
                         onPositionChanged: {
@@ -419,8 +481,13 @@ Rectangle {
                         property real startWidth
                         
                         onPressed: {
+                            isManuallyResizing = true
                             startX = mouse.x
                             startWidth = parent.parent.width
+                        }
+                        
+                        onReleased: {
+                            isManuallyResizing = false
                         }
                         
                         onPositionChanged: {
@@ -465,8 +532,13 @@ Rectangle {
                         property real startWidth
                         
                         onPressed: {
+                            isManuallyResizing = true
                             startX = mouse.x
                             startWidth = parent.parent.width
+                        }
+                        
+                        onReleased: {
+                            isManuallyResizing = false
                         }
                         
                         onPositionChanged: {
@@ -511,8 +583,13 @@ Rectangle {
                         property real startWidth
                         
                         onPressed: {
+                            isManuallyResizing = true
                             startX = mouse.x
                             startWidth = parent.parent.width
+                        }
+                        
+                        onReleased: {
+                            isManuallyResizing = false
                         }
                         
                         onPositionChanged: {
@@ -557,8 +634,13 @@ Rectangle {
                         property real startWidth
                         
                         onPressed: {
+                            isManuallyResizing = true
                             startX = mouse.x
                             startWidth = parent.parent.width
+                        }
+                        
+                        onReleased: {
+                            isManuallyResizing = false
                         }
                         
                         onPositionChanged: {
