@@ -260,6 +260,23 @@ void FrameArrangementXZController::resetFrameXZ()
     }
 }
 
+void FrameArrangementXZController::addSampleData()
+{
+    if (!m_model) {
+        qCritical() << "FrameArrangementXZController::addSampleData() - Model not set";
+        emit errorOccurred("Model not set");
+        return;
+    }
+
+    // Add some sample frame data
+    insertFrameXZ("Frame 0", 0, 1820.0, "FORWARD", 0.0, 0.0, 0.0, 0.0);
+    insertFrameXZ("Frame 1", 1, 1820.0, "FORWARD", 1.82, 0.0182, 1.82, 0.0173);
+    insertFrameXZ("Frame 2", 2, 1820.0, "FORWARD", 3.64, 0.0364, 3.64, 0.0347);
+    insertFrameXZ("Frame 3", 3, 1820.0, "FORWARD", 5.46, 0.0546, 5.46, 0.0520);
+    
+    qDebug() << "FrameArrangementXZController::addSampleData() - Sample data added successfully";
+}
+
 void FrameArrangementXZController::checkIsFrameZero()
 {
     try {

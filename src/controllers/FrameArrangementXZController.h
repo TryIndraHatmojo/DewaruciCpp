@@ -46,6 +46,9 @@ public slots:
     void getFrameXZById(int id);
     void getSecondFrameXZList();
     void resetFrameXZ();
+    
+    // Sample data
+    void addSampleData();
 
     // Utility functions
     void checkIsFrameZero();

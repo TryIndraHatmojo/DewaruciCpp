@@ -28,6 +28,8 @@ qt_add_qml_module(appDewaruciCpp
         ./qml/components/section0/LinearIsotropicMaterials/LinearIsotropicMaterials.qml
         ./qml/components/section0/ProfileTable/ProfileTable.qml
         ./qml/pages/FrameArrangement.qml
+        ./qml/components/section0/FrameArrangement/InputSection/XZInput/XZInput.qml
+        ./qml/components/section0/FrameArrangement/InputSection/YZInput/YZInput.qml
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
