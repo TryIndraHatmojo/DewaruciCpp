@@ -35,11 +35,11 @@ public:
 
 public slots:
     // Frame XZ operations
-    void insertFrameXZ(const QString &frameName, int frameNumber, double frameSpacing, 
+    void insertFrameXZ(const QString &frameName, int frameNumber, int frameSpacing, 
                       const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll);
     void getFrameXZList();
     void deleteFrameXZ(int id);
-    void updateFrameXZ(int id, const QString &frameName, int frameNumber, double frameSpacing,
+    void updateFrameXZ(int id, const QString &frameName, int frameNumber, int frameSpacing,
                       const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll);
     void updateFrameXZMl(int id, const QString &ml);
     int getXZLastId();

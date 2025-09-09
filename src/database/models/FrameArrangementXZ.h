@@ -29,12 +29,14 @@ public:
         int id;
         QString frameName;
         int frameNumber;
-        double frameSpacing;
-        double ml;
+        int frameSpacing;        // Changed from double to int
+        QString ml;              // Changed from double to QString
         double xpCoor;
         double xl;
         double xllCoor;
         double xllLll;
+        qint64 createdAt;        // Added timestamp
+        qint64 updatedAt;        // Added timestamp
     };
 
     explicit FrameArrangementXZ(QObject *parent = nullptr);
@@ -47,11 +49,11 @@ public:
     // Database operations
     Q_INVOKABLE bool createTable();
     Q_INVOKABLE bool loadData();
-    Q_INVOKABLE bool insertFrame(const QString &frameName, int frameNumber, double frameSpacing, 
-                                double ml, double xpCoor, double xl, double xllCoor, double xllLll);
-    Q_INVOKABLE bool updateFrame(int id, const QString &frameName, int frameNumber, double frameSpacing,
-                                double ml, double xpCoor, double xl, double xllCoor, double xllLll);
-    Q_INVOKABLE bool updateFrameMl(int id, double ml);
+    Q_INVOKABLE bool insertFrame(const QString &frameName, int frameNumber, int frameSpacing, 
+                                const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll);
+    Q_INVOKABLE bool updateFrame(int id, const QString &frameName, int frameNumber, int frameSpacing,
+                                const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll);
+    Q_INVOKABLE bool updateFrameMl(int id, const QString &ml);
     Q_INVOKABLE bool deleteFrame(int id);
     Q_INVOKABLE int getLastId();
     Q_INVOKABLE QVariantMap getFrameById(int id);

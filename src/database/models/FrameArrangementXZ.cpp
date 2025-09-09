@@ -76,14 +76,16 @@ bool FrameArrangementXZ::createTable()
     QString createTableSQL = R"(
         CREATE TABLE IF NOT EXISTS structure_seagoing_ship_section0_frame_arrangement_xz (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            frame_name TEXT NOT NULL,
-            frame_number INTEGER NOT NULL,
-            frame_spacing REAL NOT NULL,
-            ml REAL NOT NULL,
-            xp_coor REAL NOT NULL,
-            x_l REAL NOT NULL,
-            xll_coor REAL NOT NULL,
-            xll_lll REAL NOT NULL
+            frame_name TEXT,
+            frame_number INTEGER,
+            frame_spacing INTEGER,
+            ml TEXT,
+            xp_coor REAL,
+            x_l REAL,
+            xll_coor REAL,
+            xll_lll REAL,
+            created_at INTEGER DEFAULT (strftime('%s','now') * 1000),
+            updated_at INTEGER DEFAULT (strftime('%s','now') * 1000)
         )
     )";
 
@@ -109,7 +111,7 @@ bool FrameArrangementXZ::loadData()
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, frame_name, frame_number, frame_spacing, ml, xp_coor, x_l, xll_coor, xll_lll FROM structure_seagoing_ship_section0_frame_arrangement_xz ORDER BY id");
+    query.prepare("SELECT id, frame_name, frame_number, frame_spacing, ml, xp_coor, x_l, xll_coor, xll_lll, created_at, updated_at FROM structure_seagoing_ship_section0_frame_arrangement_xz ORDER BY id");
 
     if (!query.exec()) {
         m_lastError = QString("Failed to load frame arrangement XZ data: %1").arg(query.lastError().text());
@@ -126,12 +128,14 @@ bool FrameArrangementXZ::loadData()
         frame.id = query.value(0).toInt();
         frame.frameName = query.value(1).toString();
         frame.frameNumber = query.value(2).toInt();
-        frame.frameSpacing = query.value(3).toDouble();
-        frame.ml = query.value(4).toDouble();
+        frame.frameSpacing = query.value(3).toInt();           // Changed to toInt()
+        frame.ml = query.value(4).toString();                  // Changed to toString()
         frame.xpCoor = query.value(5).toDouble();
         frame.xl = query.value(6).toDouble();
         frame.xllCoor = query.value(7).toDouble();
         frame.xllLll = query.value(8).toDouble();
+        frame.createdAt = query.value(9).toLongLong();         // Added timestamp
+        frame.updatedAt = query.value(10).toLongLong();        // Added timestamp
 
         m_frameData.append(frame);
     }
@@ -143,8 +147,8 @@ bool FrameArrangementXZ::loadData()
     return true;
 }
 
-bool FrameArrangementXZ::insertFrame(const QString &frameName, int frameNumber, double frameSpacing,
-                                    double ml, double xpCoor, double xl, double xllCoor, double xllLll)
+bool FrameArrangementXZ::insertFrame(const QString &frameName, int frameNumber, int frameSpacing,
+                                    const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -180,8 +184,8 @@ bool FrameArrangementXZ::insertFrame(const QString &frameName, int frameNumber, 
     return true;
 }
 
-bool FrameArrangementXZ::updateFrame(int id, const QString &frameName, int frameNumber, double frameSpacing,
-                                    double ml, double xpCoor, double xl, double xllCoor, double xllLll)
+bool FrameArrangementXZ::updateFrame(int id, const QString &frameName, int frameNumber, int frameSpacing,
+                                    const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -193,7 +197,7 @@ bool FrameArrangementXZ::updateFrame(int id, const QString &frameName, int frame
 
     QSqlQuery query(db);
     query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_xz "
-                  "SET frame_name=?, frame_number=?, frame_spacing=?, ml=?, xp_coor=?, x_l=?, xll_coor=?, xll_lll=? "
+                  "SET frame_name=?, frame_number=?, frame_spacing=?, ml=?, xp_coor=?, x_l=?, xll_coor=?, xll_lll=?, updated_at=strftime('%s','now') * 1000 "
                   "WHERE id=?");
     
     query.addBindValue(frameName);
@@ -218,7 +222,7 @@ bool FrameArrangementXZ::updateFrame(int id, const QString &frameName, int frame
     return true;
 }
 
-bool FrameArrangementXZ::updateFrameMl(int id, double ml)
+bool FrameArrangementXZ::updateFrameMl(int id, const QString &ml)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -229,7 +233,7 @@ bool FrameArrangementXZ::updateFrameMl(int id, double ml)
     }
 
     QSqlQuery query(db);
-    query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_xz SET ml=? WHERE id=?");
+    query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_xz SET ml=?, updated_at=strftime('%s','now') * 1000 WHERE id=?");
     query.addBindValue(ml);
     query.addBindValue(id);
 
@@ -311,7 +315,7 @@ QVariantMap FrameArrangementXZ::getFrameById(int id)
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, frame_name, frame_number, frame_spacing, ml, xp_coor, x_l, xll_coor, xll_lll "
+    query.prepare("SELECT id, frame_name, frame_number, frame_spacing, ml, xp_coor, x_l, xll_coor, xll_lll, created_at, updated_at "
                   "FROM structure_seagoing_ship_section0_frame_arrangement_xz WHERE id=?");
     query.addBindValue(id);
 
@@ -326,12 +330,14 @@ QVariantMap FrameArrangementXZ::getFrameById(int id)
         result["id"] = query.value(0).toInt();
         result["frameName"] = query.value(1).toString();
         result["frameNumber"] = query.value(2).toInt();
-        result["frameSpacing"] = query.value(3).toDouble();
-        result["ml"] = query.value(4).toDouble();
+        result["frameSpacing"] = query.value(3).toInt();       // Changed to toInt()
+        result["ml"] = query.value(4).toString();              // Changed to toString()
         result["xpCoor"] = query.value(5).toDouble();
         result["xl"] = query.value(6).toDouble();
         result["xllCoor"] = query.value(7).toDouble();
         result["xllLll"] = query.value(8).toDouble();
+        result["createdAt"] = query.value(9).toLongLong();     // Added timestamp
+        result["updatedAt"] = query.value(10).toLongLong();    // Added timestamp
     }
 
     return result;
@@ -382,6 +388,8 @@ QVariantMap FrameArrangementXZ::getFrameAtIndex(int index) const
         result["xl"] = frame.xl;
         result["xllCoor"] = frame.xllCoor;
         result["xllLll"] = frame.xllLll;
+        result["createdAt"] = frame.createdAt;
+        result["updatedAt"] = frame.updatedAt;
     }
     
     return result;

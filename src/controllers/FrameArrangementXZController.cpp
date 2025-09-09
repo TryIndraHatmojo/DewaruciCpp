@@ -39,7 +39,7 @@ void FrameArrangementXZController::setModel(FrameArrangementXZ* model)
     m_model = model;
 }
 
-void FrameArrangementXZController::insertFrameXZ(const QString &frameName, int frameNumber, double frameSpacing,
+void FrameArrangementXZController::insertFrameXZ(const QString &frameName, int frameNumber, int frameSpacing,
                                                 const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll)
 {
     if (!m_model) {
@@ -48,11 +48,8 @@ void FrameArrangementXZController::insertFrameXZ(const QString &frameName, int f
         return;
     }
 
-    // Convert ml string to double (you might want to implement proper conversion logic)
-    double mlValue = 0.0; // Default value, implement proper conversion based on your needs
-    
     bool success = m_model->insertFrame(frameName, frameNumber, frameSpacing, 
-                                       mlValue, xpCoor, xl, xllCoor, xllLll);
+                                       ml, xpCoor, xl, xllCoor, xllLll);
     
     if (success) {
         int lastId = getXZLastId();
@@ -109,7 +106,7 @@ void FrameArrangementXZController::deleteFrameXZ(int id)
     }
 }
 
-void FrameArrangementXZController::updateFrameXZ(int id, const QString &frameName, int frameNumber, double frameSpacing,
+void FrameArrangementXZController::updateFrameXZ(int id, const QString &frameName, int frameNumber, int frameSpacing,
                                                 const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll)
 {
     if (!m_model) {
@@ -127,11 +124,8 @@ void FrameArrangementXZController::updateFrameXZ(int id, const QString &frameNam
         return;
     }
 
-    // Convert ml string to double (you might want to implement proper conversion logic)
-    double mlValue = 0.0; // Default value, implement proper conversion based on your needs
-
     bool success = m_model->updateFrame(id, frameName, frameNumber, frameSpacing, 
-                                       mlValue, xpCoor, xl, xllCoor, xllLll);
+                                       ml, xpCoor, xl, xllCoor, xllLll);
     
     if (success) {
         getFrameXZList();
@@ -180,8 +174,8 @@ void FrameArrangementXZController::updateFrameXZMl(int id, const QString &ml)
         id,
         currentFrame["frameName"].toString(),
         currentFrame["frameNumber"].toInt(),
-        currentFrame["frameSpacing"].toDouble(),
-        currentFrame["ml"].toDouble(),
+        currentFrame["frameSpacing"].toInt(),          // Changed to toInt()
+        ml,                                            // Changed to pass ml directly as string
         currentFrame["xpCoor"].toDouble(),
         currentFrame["xl"].toDouble(),
         currentFrame["xllCoor"].toDouble(),
@@ -269,10 +263,10 @@ void FrameArrangementXZController::addSampleData()
     }
 
     // Add some sample frame data
-    insertFrameXZ("Frame 0", 0, 1820.0, "FORWARD", 0.0, 0.0, 0.0, 0.0);
-    insertFrameXZ("Frame 1", 1, 1820.0, "FORWARD", 1.82, 0.0182, 1.82, 0.0173);
-    insertFrameXZ("Frame 2", 2, 1820.0, "FORWARD", 3.64, 0.0364, 3.64, 0.0347);
-    insertFrameXZ("Frame 3", 3, 1820.0, "FORWARD", 5.46, 0.0546, 5.46, 0.0520);
+    insertFrameXZ("Frame 0", 0, 1820, "FORWARD", 0.0, 0.0, 0.0, 0.0);
+    insertFrameXZ("Frame 1", 1, 1820, "FORWARD", 1.82, 0.0182, 1.82, 0.0173);
+    insertFrameXZ("Frame 2", 2, 1820, "FORWARD", 3.64, 0.0364, 3.64, 0.0347);
+    insertFrameXZ("Frame 3", 3, 1820, "FORWARD", 5.46, 0.0546, 5.46, 0.0520);
     
     qDebug() << "FrameArrangementXZController::addSampleData() - Sample data added successfully";
 }
@@ -295,7 +289,7 @@ void FrameArrangementXZController::checkIsFrameZero()
                 QString frameName = "Frame 0";
                 int frameNumber = 0;
                 QVariantMap firstFrame = dataXZ.first().toMap();
-                double frameSpacing = firstFrame["frameSpacing"].toDouble();
+                int frameSpacing = firstFrame["frameSpacing"].toInt();  // Changed to toInt()
                 QString ml = "FORWARD";
                 double xpCoor = 0;
                 double xl = 0;
@@ -332,16 +326,13 @@ void FrameArrangementXZController::checkChangedFrameXZ(const QVariantMap &change
             // Define variables
             int id = frameData["id"].toInt();
             QString frameName = frameData["frameName"].toString();
-            double frameSpacing = frameData["frameSpacing"].toDouble();
+            int frameSpacing = frameData["frameSpacing"].toInt();       // Changed to toInt()
             int frameNumber = frameData["frameNumber"].toInt();
             QString ml = frameData["ml"].toString();
             
-            // Convert ml to double value (implement proper conversion logic)
-            double mlValue = 0.0;
-            
             // Calculations
             int selisihFrame = frameNumber - defaultData["frameNumber"].toInt();
-            double xpCoor = (selisihFrame * defaultData["frameSpacing"].toDouble() / 1000.0) + defaultData["xpCoor"].toDouble();
+            double xpCoor = (selisihFrame * defaultData["frameSpacing"].toInt() / 1000.0) + defaultData["xpCoor"].toDouble();  // Changed to toInt()
             
             double lpp = getShipLength();
             double xl = xpCoor / lpp;
@@ -353,7 +344,7 @@ void FrameArrangementXZController::checkChangedFrameXZ(const QVariantMap &change
             
             // Update frame
             bool success = m_model->updateFrame(id, frameName, frameNumber, frameSpacing,
-                                               mlValue, xpCoor, xl, xllCoor, xllLll);
+                                               ml, xpCoor, xl, xllCoor, xllLll);   // Changed to pass ml directly as string
             
             if (success) {
                 // Set default data for next iteration
