@@ -53,69 +53,12 @@ ColumnLayout {
         }
     }
 
-    // --- Helpers to compute and commit updates for a row (non-shadow) ---
-    function getPrevFrameFor(number) {
-        var arr = frameXZController.frameXZList || []
-        var prev = null
-        for (var i = 0; i < arr.length; i++) {
-            var it = arr[i]
-            if (it && it.frameNumber !== undefined && it.frameNumber < number) {
-                if (!prev || it.frameNumber > prev.frameNumber) prev = it
-            }
-        }
-        return prev
-    }
-
-    function deriveLensFrom(sample) {
-        var lpp = 100.0
-        var upperL = 105.0
-        if (sample && sample.xpCoor && sample.xl && sample.xpCoor > 0 && sample.xl > 0) {
-            lpp = sample.xpCoor / sample.xl
-        }
-        if (sample && sample.xllCoor && sample.xllLll && sample.xllCoor > 0 && sample.xllLll > 0) {
-            upperL = sample.xllCoor / sample.xllLll
-        }
-        return { lpp: lpp, upperL: upperL }
-    }
-
-    function computeCoordsFor(prev, number, spacing) {
-        var n = parseInt(number) || 0
-        var s = parseInt(spacing) || 0
-        var xp = 0.0
-        var xll = 0.0
-        if (n < 0) {
-            // Negative frames: xp from number*spacing
-            xp = (n * s) / 1000.0
-            xll = xp
-        } else if (prev) {
-            // Use previous row spacing and xp as base
-            var prevXp = parseFloat(prev.xpCoor) || 0.0
-            var prevNum = parseInt(prev.frameNumber) || 0
-            var prevSpacing = parseInt(prev.frameSpacing) || 0
-            var diff = n - prevNum
-            if (diff < 0) diff = 0
-            xp = prevXp + ((diff * prevSpacing) / 1000.0)
-            xll = xp
-        } else {
-            // First non-negative frame without previous: fall back to number*spacing
-            xp = (n * s) / 1000.0
-            xll = xp
-        }
-        var lens = deriveLensFrom(prev)
-        var xl = lens.lpp > 0 ? (xp / lens.lpp) : 0.0
-        var xllLll = lens.upperL > 0 ? (xll / lens.upperL) : 0.0
-        return { xp: xp, xl: xl, xll: xll, xllLll: xllLll }
-    }
-
+    // --- Delegate recalculation and persistence to C++ controller ---
     function updateRow(id, number, spacing, ml) {
         var n = parseInt(number) || 0
         var s = parseInt(spacing) || 0
         if (id === undefined || s <= 0) return
-        var prev = getPrevFrameFor(n)
-        var coords = computeCoordsFor(prev, n, s)
-        var fname = "Frame " + n
-        console.log("updateRow ->", id, fname, n, s, ml, coords.xp, coords.xl, coords.xll, coords.xllLll)
-        frameXZController.updateFrameXZ(id, fname, n, s, ml || "FORWARD", coords.xp, coords.xl, coords.xll, coords.xllLll)
+        frameXZController.recalcAndUpdateRow(id, n, s, ml || "FORWARD")
     }
     
     RowLayout {
@@ -231,6 +174,9 @@ ColumnLayout {
                 clip: true
                 
                 ListView {
+                    id: frameList
+                    // Track which editable column currently has focus (0: Frame No, 1: F. Spacing, 2: ML)
+                    property int focusedColumn: 0
                     model: frameXZController.frameXZList
                     
                     delegate: Rectangle {
@@ -241,6 +187,17 @@ ColumnLayout {
                         border.width: 1
                         
                         property var frameData: modelData
+
+                        // Focus the editor for the given column in this row
+                        function focusColumn(col) {
+                            if (col === 0) {
+                                if (frameNumberInput) { frameNumberInput.forceActiveFocus(); frameNumberInput.selectAll() }
+                            } else if (col === 1) {
+                                if (frameSpacingInput) { frameSpacingInput.forceActiveFocus(); frameSpacingInput.selectAll() }
+                            } else {
+                                if (mlComboBox) { mlComboBox.forceActiveFocus() }
+                            }
+                        }
                         
                         Component.onCompleted: {
                             if (index === 0) {
@@ -286,25 +243,31 @@ ColumnLayout {
                                     KeyNavigation.left: frameNumberInput
                                     
                                     Keys.onUpPressed: {
-                                        if (index > 0) {
-                                            var prevItem = parent.parent.parent.parent.parent.itemAt(index - 1)
-                                            if (prevItem) {
-                                                var prevFrameNumberInput = prevItem.children[0].children[1].children[0].children[0]
-                                                focusAndSelect(prevFrameNumberInput)
+                                        frameList.currentIndex = Math.max(0, index - 1)
+                                        Qt.callLater(function() {
+                                            if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                frameList.currentItem.focusColumn(frameList.focusedColumn)
                                             }
-                                        }
+                                        })
+                                        event.accepted = true
                                     }
-                                    
+
                                     Keys.onDownPressed: {
-                                        var nextIndex = index + 1
-                                        var listView = parent.parent.parent.parent.parent
-                                        if (nextIndex < listView.count) {
-                                            var nextItem = listView.itemAt(nextIndex)
-                                            if (nextItem) {
-                                                var nextFrameNumberInput = nextItem.children[0].children[1].children[0].children[0]
-                                                focusAndSelect(nextFrameNumberInput)
+                                        if (index >= frameList.count - 1) {
+                                            // jump to shadow row, same column (Frame No.)
+                                            frameList.focusedColumn = 0
+                                            if (frameList.footerItem && frameList.footerItem.focusColumn) {
+                                                frameList.footerItem.focusColumn(0)
                                             }
+                                        } else {
+                                            frameList.currentIndex = Math.min(frameList.count - 1, index + 1)
+                                            Qt.callLater(function() {
+                                                if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                    frameList.currentItem.focusColumn(frameList.focusedColumn)
+                                                }
+                                            })
                                         }
+                                        event.accepted = true
                                     }
                                     
                                     Keys.onRightPressed: {
@@ -345,6 +308,7 @@ ColumnLayout {
                                     onActiveFocusChanged: {
                                         if (activeFocus) {
                                             selectAll()
+                                            frameList.focusedColumn = 0
                                         }
                                     }
                                 }
@@ -385,25 +349,31 @@ ColumnLayout {
                                     KeyNavigation.right: mlComboBox
                                     
                                     Keys.onUpPressed: {
-                                        if (index > 0) {
-                                            var prevItem = parent.parent.parent.parent.parent.itemAt(index - 1)
-                                            if (prevItem) {
-                                                var prevFrameSpacingInput = prevItem.children[0].children[1].children[1].children[0]
-                                                focusAndSelect(prevFrameSpacingInput)
+                                        frameList.currentIndex = Math.max(0, index - 1)
+                                        Qt.callLater(function() {
+                                            if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                frameList.currentItem.focusColumn(frameList.focusedColumn)
                                             }
-                                        }
+                                        })
+                                        event.accepted = true
                                     }
-                                    
+
                                     Keys.onDownPressed: {
-                                        var nextIndex = index + 1
-                                        var listView = parent.parent.parent.parent.parent
-                                        if (nextIndex < listView.count) {
-                                            var nextItem = listView.itemAt(nextIndex)
-                                            if (nextItem) {
-                                                var nextFrameSpacingInput = nextItem.children[0].children[1].children[1].children[0]
-                                                focusAndSelect(nextFrameSpacingInput)
+                                        if (index >= frameList.count - 1) {
+                                            // jump to shadow row, same column (F. Spacing)
+                                            frameList.focusedColumn = 1
+                                            if (frameList.footerItem && frameList.footerItem.focusColumn) {
+                                                frameList.footerItem.focusColumn(1)
                                             }
+                                        } else {
+                                            frameList.currentIndex = Math.min(frameList.count - 1, index + 1)
+                                            Qt.callLater(function() {
+                                                if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                    frameList.currentItem.focusColumn(frameList.focusedColumn)
+                                                }
+                                            })
                                         }
+                                        event.accepted = true
                                     }
                                     
                                     Keys.onRightPressed: {
@@ -444,6 +414,7 @@ ColumnLayout {
                                     onActiveFocusChanged: {
                                         if (activeFocus) {
                                             selectAll()
+                                            frameList.focusedColumn = 1
                                         }
                                     }
                                 }
@@ -475,29 +446,29 @@ ColumnLayout {
                                     KeyNavigation.right: frameNumberInput
                                     
                                     Keys.onUpPressed: {
-                                        if (index > 0) {
-                                            var prevItem = parent.parent.parent.parent.parent.itemAt(index - 1)
-                                            if (prevItem) {
-                                                var prevMlComboBox = prevItem.children[0].children[1].children[2].children[0]
-                                                if (prevMlComboBox) {
-                                                    prevMlComboBox.forceActiveFocus()
-                                                }
+                                        frameList.currentIndex = Math.max(0, index - 1)
+                                        Qt.callLater(function() {
+                                            if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                frameList.currentItem.focusColumn(frameList.focusedColumn)
                                             }
-                                        }
+                                        })
                                         event.accepted = true
                                     }
-                                    
+
                                     Keys.onDownPressed: {
-                                        var nextIndex = index + 1
-                                        var listView = parent.parent.parent.parent.parent
-                                        if (nextIndex < listView.count) {
-                                            var nextItem = listView.itemAt(nextIndex)
-                                            if (nextItem) {
-                                                var nextMlComboBox = nextItem.children[0].children[1].children[2].children[0]
-                                                if (nextMlComboBox) {
-                                                    nextMlComboBox.forceActiveFocus()
-                                                }
+                                        if (index >= frameList.count - 1) {
+                                            // jump to shadow row, same column (ML)
+                                            frameList.focusedColumn = 2
+                                            if (frameList.footerItem && frameList.footerItem.focusColumn) {
+                                                frameList.footerItem.focusColumn(2)
                                             }
+                                        } else {
+                                            frameList.currentIndex = Math.min(frameList.count - 1, index + 1)
+                                            Qt.callLater(function() {
+                                                if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                    frameList.currentItem.focusColumn(frameList.focusedColumn)
+                                                }
+                                            })
                                         }
                                         event.accepted = true
                                     }
@@ -521,6 +492,11 @@ ColumnLayout {
                                         event.accepted = true
                                     }
                                     
+                                    onActiveFocusChanged: {
+                                        if (activeFocus) {
+                                            frameList.focusedColumn = 2
+                                        }
+                                    }
                                     onCurrentTextChanged: {
                                         if (frameData && frameData.id !== undefined) {
                                             var currentNumber = parseInt(frameNumberInput.text) || 0
@@ -717,45 +693,25 @@ ColumnLayout {
                         }
 
                         function addShadowFrame() {
-                            var last = lastData()
                             var spacing = parseInt(shadowFrameSpacing) || 0
                             var number = parseInt(shadowFrameNumber) || 0
                             var mlVal = shadowML || "FORWARD"
-
-                            // Compute coordinates based on last data
-                            var xp = 0.0
-                            var xll = 0.0
-                            if (last) {
-                                var lastXp = parseFloat(last.xpCoor) || 0.0
-                                var lastXll = parseFloat(last.xllCoor) || 0.0
-                                var lastNum = parseInt(last.frameNumber) || 0
-                                var diff = number - lastNum
-                                if (diff < 0) diff = 0
-                                var step = (parseInt(spacing) || 0) / 1000.0
-                                xp = lastXp + (diff * step)
-                                xll = lastXll + (diff * step)
-                            } else {
-                                xp = 0.0
-                                xll = 0.0
-                            }
-
-                            var lens = deriveLengthsFrom(last)
-                            var xl = lens.lpp > 0 ? (xp / lens.lpp) : 0.0
-                            var xllLll = lens.upperL > 0 ? (xll / lens.upperL) : 0.0
-
                             var frameName = "Frame " + number
-
-                            console.log("Inserting new FrameXZ via shadow row:", frameName, number, spacing, mlVal, xp, xl, xll, xllLll)
-                            frameXZController.insertFrameXZ(frameName, number, spacing, mlVal, xp, xl, xll, xllLll)
-
-                            // After insert, refresh defaults from new last row on list change signal
+                            frameXZController.insertWithRecalc(frameName, number, spacing, mlVal)
                             Qt.callLater(function() {
-                                // Keep focus in shadow row for rapid entry
-                                if (shadowFrameNumberInput) {
-                                    shadowFrameNumberInput.forceActiveFocus()
-                                    shadowFrameNumberInput.selectAll()
-                                }
+                                if (shadowFrameNumberInput) { shadowFrameNumberInput.forceActiveFocus(); shadowFrameNumberInput.selectAll() }
                             })
+                        }
+
+                        // Allow external focus routing (from data row) by column index
+                        function focusColumn(col) {
+                            if (col === 0) {
+                                if (shadowFrameNumberInput) { shadowFrameNumberInput.forceActiveFocus(); shadowFrameNumberInput.selectAll() }
+                            } else if (col === 1) {
+                                if (shadowFrameSpacingInput) { shadowFrameSpacingInput.forceActiveFocus(); shadowFrameSpacingInput.selectAll() }
+                            } else if (col === 2) {
+                                if (shadowMlComboBox) { shadowMlComboBox.forceActiveFocus() }
+                            }
                         }
 
                         Component.onCompleted: autoUpdateFromLastRow()
@@ -797,16 +753,20 @@ ColumnLayout {
 
                                     Keys.onReturnPressed: shadowRow.addShadowFrame()
                                     Keys.onEnterPressed: shadowRow.addShadowFrame()
+                                    Keys.onRightPressed: {
+                                        if (shadowFrameSpacingInput) { shadowFrameSpacingInput.forceActiveFocus(); shadowFrameSpacingInput.selectAll() }
+                                        event.accepted = true
+                                    }
                                     Keys.onUpPressed: {
-                                        // Focus same column in last data row if exists
-                                        var lv = shadowRow.ListView.view
-                                        if (lv && lv.count > 0) {
-                                            var lastItem = lv.itemAt(lv.count - 1)
-                                            if (lastItem) {
-                                                var inpt = lastItem.children[0].children[1].children[0].children[0]
-                                                if (inpt) { inpt.forceActiveFocus(); inpt.selectAll() }
-                                            }
+                                        if (frameList.count > 0) {
+                                            frameList.currentIndex = frameList.count - 1
+                                            Qt.callLater(function() {
+                                                if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                    frameList.currentItem.focusColumn(0)
+                                                }
+                                            })
                                         }
+                                        event.accepted = true
                                     }
                                 }
                             }
@@ -840,15 +800,24 @@ ColumnLayout {
 
                                     Keys.onReturnPressed: shadowRow.addShadowFrame()
                                     Keys.onEnterPressed: shadowRow.addShadowFrame()
+                                    Keys.onLeftPressed: {
+                                        if (shadowFrameNumberInput) { shadowFrameNumberInput.forceActiveFocus(); shadowFrameNumberInput.selectAll() }
+                                        event.accepted = true
+                                    }
+                                    Keys.onRightPressed: {
+                                        if (shadowMlComboBox) { shadowMlComboBox.forceActiveFocus() }
+                                        event.accepted = true
+                                    }
                                     Keys.onUpPressed: {
-                                        var lv = shadowRow.ListView.view
-                                        if (lv && lv.count > 0) {
-                                            var lastItem = lv.itemAt(lv.count - 1)
-                                            if (lastItem) {
-                                                var inpt = lastItem.children[0].children[1].children[1].children[0]
-                                                if (inpt) { inpt.forceActiveFocus(); inpt.selectAll() }
-                                            }
+                                        if (frameList.count > 0) {
+                                            frameList.currentIndex = frameList.count - 1
+                                            Qt.callLater(function() {
+                                                if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                    frameList.currentItem.focusColumn(1)
+                                                }
+                                            })
                                         }
+                                        event.accepted = true
                                     }
                                 }
                             }
@@ -869,22 +838,31 @@ ColumnLayout {
                                     currentIndex: shadowRow.shadowML === "AFTER" ? 1 : 0
                                     font.pixelSize: 9
 
-                                    KeyNavigation.tab: shadowAddButton
+                                    KeyNavigation.tab: shadowFrameNumberInput
                                     KeyNavigation.backtab: shadowFrameSpacingInput
                                     KeyNavigation.left: shadowFrameSpacingInput
-                                    KeyNavigation.right: shadowAddButton
+                                    KeyNavigation.right: shadowFrameNumberInput
 
                                     Keys.onReturnPressed: shadowRow.addShadowFrame()
                                     Keys.onEnterPressed: shadowRow.addShadowFrame()
+                                    Keys.onLeftPressed: {
+                                        if (shadowFrameSpacingInput) { shadowFrameSpacingInput.forceActiveFocus(); shadowFrameSpacingInput.selectAll() }
+                                        event.accepted = true
+                                    }
+                                    Keys.onRightPressed: {
+                                        if (shadowFrameNumberInput) { shadowFrameNumberInput.forceActiveFocus(); shadowFrameNumberInput.selectAll() }
+                                        event.accepted = true
+                                    }
                                     Keys.onUpPressed: {
-                                        var lv = shadowRow.ListView.view
-                                        if (lv && lv.count > 0) {
-                                            var lastItem = lv.itemAt(lv.count - 1)
-                                            if (lastItem) {
-                                                var cb = lastItem.children[0].children[1].children[2].children[0]
-                                                if (cb) cb.forceActiveFocus()
-                                            }
+                                        if (frameList.count > 0) {
+                                            frameList.currentIndex = frameList.count - 1
+                                            Qt.callLater(function() {
+                                                if (frameList.currentItem && frameList.currentItem.focusColumn) {
+                                                    frameList.currentItem.focusColumn(2)
+                                                }
+                                            })
                                         }
+                                        event.accepted = true
                                     }
 
                                     onCurrentIndexChanged: {

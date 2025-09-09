@@ -46,6 +46,10 @@ public slots:
     void getFrameXZById(int id);
     void getSecondFrameXZList();
     void resetFrameXZ();
+    // Recalculate-and-update a row (by id) and cascade affected rows
+    Q_INVOKABLE void recalcAndUpdateRow(int id, int frameNumber, int frameSpacing, const QString &ml);
+    // Insert a row with C++-side calculation, then cascade if needed
+    Q_INVOKABLE void insertWithRecalc(const QString &frameName, int frameNumber, int frameSpacing, const QString &ml);
     
     // Sample data
     void addSampleData();
