@@ -42,6 +42,10 @@ QVariant FrameArrangementYZ::data(const QModelIndex &index, int role) const
         return frame.fa;
     case SymRole:
         return frame.sym;
+    case CreatedAtRole:
+        return frame.createdAt;
+    case UpdatedAtRole:
+        return frame.updatedAt;
     default:
         return QVariant();
     }
@@ -59,6 +63,8 @@ QHash<int, QByteArray> FrameArrangementYZ::roleNames() const
     roles[FrameNoRole] = "frameNo";
     roles[FaRole] = "fa";
     roles[SymRole] = "sym";
+    roles[CreatedAtRole] = "createdAt";
+    roles[UpdatedAtRole] = "updatedAt";
     return roles;
 }
 
@@ -76,14 +82,16 @@ bool FrameArrangementYZ::createTable()
     QString createTableSQL = R"(
         CREATE TABLE IF NOT EXISTS structure_seagoing_ship_section0_frame_arrangement_yz (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            no INTEGER NOT NULL,
-            spacing REAL NOT NULL,
-            y REAL NOT NULL,
-            z REAL NOT NULL,
-            frame_no INTEGER NOT NULL,
-            fa REAL NOT NULL,
-            sym REAL NOT NULL
+            name TEXT,
+            no INTEGER,
+            spacing REAL,
+            y REAL,
+            z REAL,
+            frame_no INTEGER,
+            fa TEXT,
+            sym TEXT,
+            created_at INTEGER DEFAULT (strftime('%s','now') * 1000),
+            updated_at INTEGER DEFAULT (strftime('%s','now') * 1000)
         )
     )";
 
@@ -109,7 +117,7 @@ bool FrameArrangementYZ::loadData()
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym FROM structure_seagoing_ship_section0_frame_arrangement_yz ORDER BY id");
+    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, created_at, updated_at FROM structure_seagoing_ship_section0_frame_arrangement_yz ORDER BY id");
 
     if (!query.exec()) {
         m_lastError = QString("Failed to load frame arrangement YZ data: %1").arg(query.lastError().text());
@@ -130,8 +138,10 @@ bool FrameArrangementYZ::loadData()
         frame.y = query.value(4).toDouble();
         frame.z = query.value(5).toDouble();
         frame.frameNo = query.value(6).toInt();
-        frame.fa = query.value(7).toDouble();
-        frame.sym = query.value(8).toDouble();
+    frame.fa = query.value(7).toString();
+    frame.sym = query.value(8).toString();
+    frame.createdAt = query.value(9).toLongLong();
+    frame.updatedAt = query.value(10).toLongLong();
 
         m_frameYZData.append(frame);
     }
@@ -154,7 +164,7 @@ bool FrameArrangementYZ::loadDataByFrameNo(int frameNumber)
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym FROM structure_seagoing_ship_section0_frame_arrangement_yz WHERE frame_no = ? ORDER BY id");
+    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, created_at, updated_at FROM structure_seagoing_ship_section0_frame_arrangement_yz WHERE frame_no = ? ORDER BY id");
     query.addBindValue(frameNumber);
 
     if (!query.exec()) {
@@ -176,8 +186,10 @@ bool FrameArrangementYZ::loadDataByFrameNo(int frameNumber)
         frame.y = query.value(4).toDouble();
         frame.z = query.value(5).toDouble();
         frame.frameNo = query.value(6).toInt();
-        frame.fa = query.value(7).toDouble();
-        frame.sym = query.value(8).toDouble();
+    frame.fa = query.value(7).toString();
+    frame.sym = query.value(8).toString();
+    frame.createdAt = query.value(9).toLongLong();
+    frame.updatedAt = query.value(10).toLongLong();
 
         m_frameYZData.append(frame);
     }
@@ -190,7 +202,7 @@ bool FrameArrangementYZ::loadDataByFrameNo(int frameNumber)
 }
 
 int FrameArrangementYZ::insertFrame(const QString &name, int no, double spacing,
-                                   double y, double z, int frameNo, double fa, double sym)
+                                   double y, double z, int frameNo, const QString &fa, const QString &sym)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -228,7 +240,7 @@ int FrameArrangementYZ::insertFrame(const QString &name, int no, double spacing,
 }
 
 bool FrameArrangementYZ::updateFrame(int id, const QString &name, int no, double spacing,
-                                    double y, double z, int frameNo, double fa, double sym)
+                                    double y, double z, int frameNo, const QString &fa, const QString &sym)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -240,7 +252,7 @@ bool FrameArrangementYZ::updateFrame(int id, const QString &name, int no, double
 
     QSqlQuery query(db);
     query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_yz "
-                  "SET name=?, no=?, spacing=?, y=?, z=?, frame_no=?, fa=?, sym=? "
+                  "SET name=?, no=?, spacing=?, y=?, z=?, frame_no=?, fa=?, sym=?, updated_at=(strftime('%s','now')*1000) "
                   "WHERE id=?");
     
     query.addBindValue(name);
@@ -265,7 +277,7 @@ bool FrameArrangementYZ::updateFrame(int id, const QString &name, int no, double
     return true;
 }
 
-bool FrameArrangementYZ::updateFrameFa(int id, double fa)
+bool FrameArrangementYZ::updateFrameFa(int id, const QString &fa)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -276,7 +288,7 @@ bool FrameArrangementYZ::updateFrameFa(int id, double fa)
     }
 
     QSqlQuery query(db);
-    query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_yz SET fa=? WHERE id=?");
+    query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_yz SET fa=?, updated_at=(strftime('%s','now')*1000) WHERE id=?");
     query.addBindValue(fa);
     query.addBindValue(id);
 
@@ -292,7 +304,7 @@ bool FrameArrangementYZ::updateFrameFa(int id, double fa)
     return true;
 }
 
-bool FrameArrangementYZ::updateFrameSym(int id, double sym)
+bool FrameArrangementYZ::updateFrameSym(int id, const QString &sym)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -303,7 +315,7 @@ bool FrameArrangementYZ::updateFrameSym(int id, double sym)
     }
 
     QSqlQuery query(db);
-    query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_yz SET sym=? WHERE id=?");
+    query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_yz SET sym=?, updated_at=(strftime('%s','now')*1000) WHERE id=?");
     query.addBindValue(sym);
     query.addBindValue(id);
 
@@ -384,7 +396,7 @@ QVariantMap FrameArrangementYZ::getFrameById(int id)
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym "
+    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, created_at, updated_at "
                   "FROM structure_seagoing_ship_section0_frame_arrangement_yz WHERE id=?");
     query.addBindValue(id);
 
@@ -402,9 +414,11 @@ QVariantMap FrameArrangementYZ::getFrameById(int id)
         result["spacing"] = query.value(3).toDouble();
         result["y"] = query.value(4).toDouble();
         result["z"] = query.value(5).toDouble();
-        result["frameNo"] = query.value(6).toInt();
-        result["fa"] = query.value(7).toDouble();
-        result["sym"] = query.value(8).toDouble();
+    result["frameNo"] = query.value(6).toInt();
+    result["fa"] = query.value(7).toString();
+    result["sym"] = query.value(8).toString();
+    result["createdAt"] = query.value(9).toLongLong();
+    result["updatedAt"] = query.value(10).toLongLong();
     }
 
     return result;
@@ -423,7 +437,7 @@ QVariantList FrameArrangementYZ::getFramesByName(const QString &name)
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym "
+    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, created_at, updated_at "
                   "FROM structure_seagoing_ship_section0_frame_arrangement_yz WHERE name=?");
     query.addBindValue(name);
 
@@ -442,9 +456,11 @@ QVariantList FrameArrangementYZ::getFramesByName(const QString &name)
         frame["spacing"] = query.value(3).toDouble();
         frame["y"] = query.value(4).toDouble();
         frame["z"] = query.value(5).toDouble();
-        frame["frameNo"] = query.value(6).toInt();
-        frame["fa"] = query.value(7).toDouble();
-        frame["sym"] = query.value(8).toDouble();
+    frame["frameNo"] = query.value(6).toInt();
+    frame["fa"] = query.value(7).toString();
+    frame["sym"] = query.value(8).toString();
+    frame["createdAt"] = query.value(9).toLongLong();
+    frame["updatedAt"] = query.value(10).toLongLong();
         result.append(frame);
     }
 
@@ -464,7 +480,7 @@ QVariantList FrameArrangementYZ::getFramesByFrameNo(int frameNumber)
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym "
+    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, created_at, updated_at "
                   "FROM structure_seagoing_ship_section0_frame_arrangement_yz WHERE frame_no=?");
     query.addBindValue(frameNumber);
 
@@ -483,9 +499,11 @@ QVariantList FrameArrangementYZ::getFramesByFrameNo(int frameNumber)
         frame["spacing"] = query.value(3).toDouble();
         frame["y"] = query.value(4).toDouble();
         frame["z"] = query.value(5).toDouble();
-        frame["frameNo"] = query.value(6).toInt();
-        frame["fa"] = query.value(7).toDouble();
-        frame["sym"] = query.value(8).toDouble();
+    frame["frameNo"] = query.value(6).toInt();
+    frame["fa"] = query.value(7).toString();
+    frame["sym"] = query.value(8).toString();
+    frame["createdAt"] = query.value(9).toLongLong();
+    frame["updatedAt"] = query.value(10).toLongLong();
         result.append(frame);
     }
 
