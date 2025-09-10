@@ -14,6 +14,7 @@ class FrameArrangementYZController : public QObject {
     Q_PROPERTY(QJsonArray selectedFrameYZ READ selectedFrameYZ WRITE setSelectedFrameYZ NOTIFY selectedFrameYZChanged)
     Q_PROPERTY(QJsonArray selectedFrameYZId READ selectedFrameYZId WRITE setSelectedFrameYZId NOTIFY selectedFrameYZIdChanged)
     Q_PROPERTY(QJsonArray selectedFrameYZName READ selectedFrameYZName WRITE setSelectedFrameYZName NOTIFY selectedFrameYZNameChanged)
+    Q_PROPERTY(QJsonArray frameYZDrawing READ frameYZDrawing WRITE setFrameYZDrawing NOTIFY frameYZDrawingChanged)
 
 public:
     explicit FrameArrangementYZController(QObject* parent = nullptr);
@@ -23,11 +24,13 @@ public:
     QJsonArray selectedFrameYZ() const { return m_selectedFrameYZ; }
     QJsonArray selectedFrameYZId() const { return m_selectedFrameYZId; }
     QJsonArray selectedFrameYZName() const { return m_selectedFrameYZName; }
+    QJsonArray frameYZDrawing() const { return m_frameYZDrawing; }
 
     void setFrameYZList(const QJsonArray &list);
     void setSelectedFrameYZ(const QJsonArray &list);
     void setSelectedFrameYZId(const QJsonArray &list);
     void setSelectedFrameYZName(const QJsonArray &list);
+    void setFrameYZDrawing(const QJsonArray &list) { if (m_frameYZDrawing != list) { m_frameYZDrawing = list; emit frameYZDrawingChanged(); } }
 
     // Initialize with model
     void setModel(FrameArrangementYZ* model);
@@ -46,6 +49,11 @@ public slots:
     Q_INVOKABLE void getFrameYZAll();
     Q_INVOKABLE void getFrameYZById(int id);
     Q_INVOKABLE void getFrameYZByName(const QString &name);
+    // Drawing table operations
+    Q_INVOKABLE int insertFrameYZDrawing(int frameyzId, const QString &name, int no, double spacing,
+                                         double y, double z, int frameNo, const QString &fa, const QString &sym);
+    Q_INVOKABLE bool resetFrameYZDrawing();
+    Q_INVOKABLE void getAllFrameYZDrawing();
 
 signals:
     void frameYZListChanged();
@@ -53,6 +61,8 @@ signals:
     void selectedFrameYZIdChanged();
     void selectedFrameYZNameChanged();
     void errorOccurred(const QString &error);
+    void frameYZDrawingChanged();
+    void frameArrangementYZDrawingChanged();
 
 private:
     FrameArrangementYZ* m_model;
@@ -60,6 +70,7 @@ private:
     QJsonArray m_selectedFrameYZ;
     QJsonArray m_selectedFrameYZId;
     QJsonArray m_selectedFrameYZName;
+    QJsonArray m_frameYZDrawing;
 
     QJsonArray generateObjectJson(const QVariantList &data);
 };

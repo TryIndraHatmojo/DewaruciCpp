@@ -127,11 +127,9 @@ ColumnLayout {
                             if (isNaN(zVal)) zVal = 0
                             var frameNoVal = parseInt(frameNoInput.text)
                             if (isNaN(frameNoVal)) frameNoVal = 0
-                            // FA/Sym are treated numeric in controller; keep as numbers 0/1
-                            var faVal = parseFloat(faComboBox.currentText)
-                            if (isNaN(faVal)) faVal = parseFloat(row.fa) || 0
-                            var symVal = parseFloat(symComboBox.currentText)
-                            if (isNaN(symVal)) symVal = parseFloat(row.sym) || 0
+                            // Pass FA/Sym as their string labels now
+                            var faVal = faComboBox.currentText || (row.fa || "F")
+                            var symVal = symComboBox.currentText || (row.sym || "P")
                             frameYZController.updateFrameYZ(row.id, nameVal, noVal, spacingVal, yVal, zVal, frameNoVal, faVal, symVal)
                         }
 
@@ -424,26 +422,56 @@ ColumnLayout {
                                 border.color: "#bdc3c7"
                                 border.width: 0.5
                                 
-                Button {
+                                // Trash icon (like XZInput)
+                                Rectangle {
                                     anchors.centerIn: parent
-                                    width: parent.width - 4
-                                    height: parent.height - 4
-                                    text: "Delete"
-                                    font.pixelSize: 8
-                                    background: Rectangle {
-                                        color: "#e74c3c"
-                                        radius: 2
+                                    width: 16
+                                    height: 18
+                                    color: "transparent"
+
+                                    // Trash lid
+                                    Rectangle {
+                                        width: 14
+                                        height: 2
+                                        color: "#f44336"
+                                        anchors.top: parent.top
+                                        anchors.horizontalCenter: parent.horizontalCenter
                                     }
-                                    contentItem: Text {
-                                        text: parent.text
-                                        color: "#ffffff"
-                                        font.pixelSize: parent.font.pixelSize
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
+
+                                    // Trash handle
+                                    Rectangle {
+                                        width: 6
+                                        height: 2
+                                        color: "#f44336"
+                                        anchors.top: parent.top
+                                        anchors.topMargin: -2
+                                        anchors.horizontalCenter: parent.horizontalCenter
                                     }
-                                    onClicked: {
-                    // Use row.id (avoid collision with QML id)
-                    if (row && row.id) { frameYZController.deleteFrameYZ(row.id) }
+
+                                    // Trash body
+                                    Rectangle {
+                                        width: 12
+                                        height: 14
+                                        color: "#f44336"
+                                        anchors.top: parent.top
+                                        anchors.topMargin: 2
+                                        anchors.horizontalCenter: parent.horizontalCenter
+
+                                        // Vertical lines inside trash
+                                        Rectangle { width: 1; height: 10; color: "white"; anchors.left: parent.left; anchors.leftMargin: 3; anchors.top: parent.top; anchors.topMargin: 2 }
+                                        Rectangle { width: 1; height: 10; color: "white"; anchors.horizontalCenter: parent.horizontalCenter; anchors.top: parent.top; anchors.topMargin: 2 }
+                                        Rectangle { width: 1; height: 10; color: "white"; anchors.right: parent.right; anchors.rightMargin: 3; anchors.top: parent.top; anchors.topMargin: 2 }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onEntered: { parent.scale = 1.1 }
+                                        onExited: { parent.scale = 1.0 }
+                                        onClicked: {
+                                            if (row && row.id) { frameYZController.deleteFrameYZ(row.id) }
+                                        }
                                     }
                                 }
                             }
@@ -453,7 +481,7 @@ ColumnLayout {
                     // Shadow row footer to add new frame based on last row
                     footer: Rectangle {
                         id: yzShadowRow
-                        width: ListView.view ? ListView.view.width : parent.width
+                        width: ListView.view.width
                         height: 38
                         color: "#eef6ff"
                         border.color: "#bdc3c7"
@@ -499,14 +527,15 @@ ColumnLayout {
                         }
 
                         function addShadowRow() {
-                            var nameVal = shadowName || "L0"
-                            var noVal = parseInt(shadowNo); if (isNaN(noVal)) noVal = 0
-                            var spacingVal = parseFloat(shadowSpacing); if (isNaN(spacingVal)) spacingVal = 0
-                            var yVal = parseFloat(shadowY); if (isNaN(yVal)) yVal = 0
-                            var zVal = parseFloat(shadowZ); if (isNaN(zVal)) zVal = 0
-                            var frameNoVal = parseInt(shadowFrameNo); if (isNaN(frameNoVal)) frameNoVal = 0
-                            var faVal = parseFloat(shadowFa); if (isNaN(faVal)) faVal = 0
-                            var symVal = parseFloat(shadowSym); if (isNaN(symVal)) symVal = 0
+                            // Use current editor texts (properties kept in sync via onTextChanged)
+                            var nameVal = shadowNameInput.text || "L0"
+                            var noVal = parseInt(shadowNoInput.text); if (isNaN(noVal)) noVal = 0
+                            var spacingVal = parseFloat(shadowSpacingInput.text); if (isNaN(spacingVal)) spacingVal = 0
+                            var yVal = parseFloat(shadowYInput.text); if (isNaN(yVal)) yVal = 0
+                            var zVal = parseFloat(shadowZInput.text); if (isNaN(zVal)) zVal = 0
+                            var frameNoVal = parseInt(shadowFrameNoInput.text); if (isNaN(frameNoVal)) frameNoVal = 0
+                            var faVal = shadowFaComboBox.currentText || "F"
+                            var symVal = shadowSymComboBox.currentText || "P"
                             frameYZController.insertFrameYZ(nameVal, noVal, spacingVal, yVal, zVal, frameNoVal, faVal, symVal)
                             Qt.callLater(function() {
                                 if (shadowNameInput) { shadowNameInput.forceActiveFocus(); shadowNameInput.selectAll() }
@@ -559,6 +588,7 @@ ColumnLayout {
                                     text: yzShadowRow.shadowName
                                     font.pixelSize: 10
                                     selectByMouse: true
+                                    onTextChanged: yzShadowRow.shadowName = text
                                     Keys.onPressed: {
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 1; shadowNoInput.forceActiveFocus(); shadowNoInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Right) { yzList.focusedColumn = 1; shadowNoInput.forceActiveFocus(); shadowNoInput.selectAll(); event.accepted = true }
@@ -588,6 +618,7 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: IntValidator { bottom: 0 }
                                     selectByMouse: true
+                                    onTextChanged: yzShadowRow.shadowNo = parseInt(text) || 0
                                     Keys.onPressed: {
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 2; shadowSpacingInput.forceActiveFocus(); shadowSpacingInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { yzList.focusedColumn = 0; shadowNameInput.forceActiveFocus(); shadowNameInput.selectAll(); event.accepted = true }
@@ -618,6 +649,7 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: DoubleValidator { bottom: 0; decimals: 3 }
                                     selectByMouse: true
+                                    onTextChanged: yzShadowRow.shadowSpacing = parseFloat(text) || 0
                                     Keys.onPressed: {
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 3; shadowYInput.forceActiveFocus(); shadowYInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { yzList.focusedColumn = 1; shadowNoInput.forceActiveFocus(); shadowNoInput.selectAll(); event.accepted = true }
@@ -648,6 +680,7 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: DoubleValidator { decimals: 3 }
                                     selectByMouse: true
+                                    onTextChanged: yzShadowRow.shadowY = parseFloat(text) || 0
                                     Keys.onPressed: {
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 4; shadowZInput.forceActiveFocus(); shadowZInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { yzList.focusedColumn = 2; shadowSpacingInput.forceActiveFocus(); shadowSpacingInput.selectAll(); event.accepted = true }
@@ -678,6 +711,7 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: DoubleValidator { decimals: 3 }
                                     selectByMouse: true
+                                    onTextChanged: yzShadowRow.shadowZ = parseFloat(text) || 0
                                     Keys.onPressed: {
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 5; shadowFrameNoInput.forceActiveFocus(); shadowFrameNoInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { yzList.focusedColumn = 3; shadowYInput.forceActiveFocus(); shadowYInput.selectAll(); event.accepted = true }
@@ -708,6 +742,7 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: IntValidator { bottom: 0 }
                                     selectByMouse: true
+                                    onTextChanged: yzShadowRow.shadowFrameNo = parseInt(text) || 0
                                     Keys.onPressed: {
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 6; shadowFaComboBox.forceActiveFocus(); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { yzList.focusedColumn = 4; shadowZInput.forceActiveFocus(); shadowZInput.selectAll(); event.accepted = true }
@@ -797,28 +832,24 @@ ColumnLayout {
                                 }
                             }
 
-                            // Action column (Add)
+                            // Action column (Add) styled like XZInput
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "#f8f8f8"
-                                border.color: "#bdc3c7"
                                 border.width: 0.5
-                                Button {
+                                border.color: "#bdc3c7"
+                                color: "#f8f8f8"
+                                Text {
                                     anchors.centerIn: parent
-                                    width: parent.width - 4
-                                    height: parent.height - 4
                                     text: "Add"
-                                    font.pixelSize: 9
-                                    background: Rectangle { color: "#2ecc71"; radius: 2 }
-                                    contentItem: Text {
-                                        text: parent.text
-                                        color: "#ffffff"
-                                        font.pixelSize: parent.font.pixelSize
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
+                                    font.pixelSize: 10
+                                    color: "#2196F3"
+                                    font.bold: true
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: yzShadowRow.addShadowRow()
                                     }
-                                    onClicked: yzShadowRow.addShadowRow()
                                 }
                             }
                         }

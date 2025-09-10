@@ -10,6 +10,7 @@
 #include "src/database/models/FrameArrangementYZ.h"
 #include "src/controllers/StructureProfileTableController.h"
 #include "src/controllers/FrameArrangementXZController.h"
+#include "src/controllers/FrameArrangementYZController.h"
 
 int main(int argc, char *argv[])
 {
@@ -41,9 +42,11 @@ int main(int argc, char *argv[])
     // Create controller instances
     StructureProfileTableController* profileController = new StructureProfileTableController(&app);
     FrameArrangementXZController* frameXZController = new FrameArrangementXZController(&app);
+    FrameArrangementYZController* frameYZController = new FrameArrangementYZController(&app);
     
     // Set model for controllers
     frameXZController->setModel(frameXZModel);
+    frameYZController->setModel(frameYZModel);
     
     // Create tables
     if (DatabaseConnection::instance().isConnected()) {
@@ -60,6 +63,7 @@ int main(int argc, char *argv[])
         
         // Initialize controller data
         frameXZController->getFrameXZList();
+    frameYZController->getFrameYZAll();
     }
 
     QQmlApplicationEngine engine;
@@ -70,6 +74,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("frameYZModel", frameYZModel);
     engine.rootContext()->setContextProperty("profileController", profileController);
     engine.rootContext()->setContextProperty("frameXZController", frameXZController);
+    engine.rootContext()->setContextProperty("frameYZController", frameYZController);
     
     QObject::connect(
         &engine,

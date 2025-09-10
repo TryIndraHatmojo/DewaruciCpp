@@ -7,6 +7,7 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDebug>
+#include <string>
 
 class FrameArrangementYZ : public QAbstractListModel
 {
@@ -64,6 +65,29 @@ public:
     Q_INVOKABLE QVariantList getFramesByName(const QString &name);
     Q_INVOKABLE QVariantList getFramesByFrameNo(int frameNumber);
 
+    // YZ Drawing auxiliary table operations
+    Q_INVOKABLE bool createDrawingTable();
+    Q_INVOKABLE int insertFrameYZDrawing(int frameyzId, const QString &name, int no, double spacing,
+                                         double y, double z, int frameNo, const QString &fa, const QString &sym);
+    Q_INVOKABLE bool resetFrameYZDrawingTable();
+    Q_INVOKABLE QVariantList getAllFrameYZDrawing();
+
+    // Optional in-memory storage for drawing rows matching required C++ types
+    struct FrameYZDrawingData {
+        int id{0};
+        int frameyz_id{0};
+        std::string name;
+        int no{0};
+        double spacing{0.0};
+        double y{0.0};
+        double z{0.0};
+        int frame_no{0};
+        std::string fa;
+        std::string sym;
+        int created_at{0}; // Note: DB stores milliseconds epoch (64-bit); truncated to int per spec
+        int updated_at{0};
+    };
+
     // Utility functions
     Q_INVOKABLE int getRowCount() const;
     Q_INVOKABLE QVariantMap getFrameAtIndex(int index) const;
@@ -74,6 +98,7 @@ signals:
 
 private:
     QList<FrameYZData> m_frameYZData;
+    QList<FrameYZDrawingData> m_frameYZDrawingData; // mirrors drawing table
     QString m_lastError;
     
     void clearData();

@@ -18,6 +18,7 @@ qt_add_executable(appDewaruciCpp
     src/database/models/FrameArrangementYZ.cpp
     src/controllers/StructureProfileTableController.cpp
     src/controllers/FrameArrangementXZController.cpp
+    src/controllers/FrameArrangementYZController.cpp
 )
 
 qt_add_qml_module(appDewaruciCpp

@@ -72,44 +72,6 @@ ColumnLayout {
         }
         
         Item { Layout.fillWidth: true }
-        
-        Button {
-            text: "Add Sample Data"
-            font.pixelSize: 10
-            background: Rectangle {
-                color: "#3498db"
-                radius: 4
-            }
-            contentItem: Text {
-                text: parent.text
-                color: "#ffffff"
-                font.pixelSize: parent.font.pixelSize
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-            onClicked: {
-                frameXZController.addSampleData()
-            }
-        }
-        
-        Button {
-            text: "Reset"
-            font.pixelSize: 10
-            background: Rectangle {
-                color: "#e74c3c"
-                radius: 4
-            }
-            contentItem: Text {
-                text: parent.text
-                color: "#ffffff"
-                font.pixelSize: parent.font.pixelSize
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-            onClicked: {
-                frameXZController.resetFrameXZ()
-            }
-        }
     }
     
     Rectangle {

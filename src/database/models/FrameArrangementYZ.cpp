@@ -544,3 +544,156 @@ QSqlDatabase FrameArrangementYZ::getDatabase() const
 {
     return DatabaseShipConnection::instance().getDatabase();
 }
+
+// ---------------- YZ Drawing Table Operations ----------------
+// Mirrors the Python helper functions provided: create/insert/reset/fetch
+
+bool FrameArrangementYZ::createDrawingTable()
+{
+    QSqlDatabase db = getDatabase();
+    if (!db.isValid()) {
+        m_lastError = "Ship database connection is not valid";
+        qCritical() << "FrameArrangementYZ::createDrawingTable() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return false;
+    }
+
+    QSqlQuery query(db);
+    const QString sql = R"(
+        CREATE TABLE IF NOT EXISTS structure_seagoing_ship_section0_frame_arrangement_yz_drawing (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            frameyz_id INTEGER,
+            name TEXT,
+            no INTEGER,
+            spacing REAL,
+            y REAL,
+            z REAL,
+            frame_no INTEGER,
+            fa TEXT,
+            sym TEXT,
+            created_at INTEGER DEFAULT (strftime('%s','now') * 1000),
+            updated_at INTEGER DEFAULT (strftime('%s','now') * 1000)
+        )
+    )";
+
+    if (!query.exec(sql)) {
+        m_lastError = QString("Failed to create YZ drawing table: %1").arg(query.lastError().text());
+        qCritical() << "FrameArrangementYZ::createDrawingTable() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return false;
+    }
+    qDebug() << "FrameArrangementYZ::createDrawingTable() - Table ensured";
+    return true;
+}
+
+int FrameArrangementYZ::insertFrameYZDrawing(int frameyzId, const QString &name, int no, double spacing,
+                                             double y, double z, int frameNo, const QString &fa, const QString &sym)
+{
+    QSqlDatabase db = getDatabase();
+    if (!db.isValid()) {
+        m_lastError = "Ship database connection is not valid";
+        qCritical() << "FrameArrangementYZ::insertFrameYZDrawing() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return -1;
+    }
+
+    QSqlQuery query(db);
+    query.prepare("INSERT INTO structure_seagoing_ship_section0_frame_arrangement_yz_drawing "
+                  "(frameyz_id, name, no, spacing, y, z, frame_no, fa, sym) VALUES (?,?,?,?,?,?,?,?,?)");
+    query.addBindValue(frameyzId);
+    query.addBindValue(name);
+    query.addBindValue(no);
+    query.addBindValue(spacing);
+    query.addBindValue(y);
+    query.addBindValue(z);
+    query.addBindValue(frameNo);
+    query.addBindValue(fa);
+    query.addBindValue(sym);
+
+    if (!query.exec()) {
+        m_lastError = QString("Failed to insert YZ drawing frame: %1").arg(query.lastError().text());
+        qCritical() << "FrameArrangementYZ::insertFrameYZDrawing() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return -1;
+    }
+    int insertedId = query.lastInsertId().toInt();
+    qDebug() << "FrameArrangementYZ::insertFrameYZDrawing() - Inserted drawing row id" << insertedId;
+    return insertedId;
+}
+
+bool FrameArrangementYZ::resetFrameYZDrawingTable()
+{
+    QSqlDatabase db = getDatabase();
+    if (!db.isValid()) {
+        m_lastError = "Ship database connection is not valid";
+        qCritical() << "FrameArrangementYZ::resetFrameYZDrawingTable() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return false;
+    }
+
+    QSqlQuery query(db);
+    if (!query.exec("DELETE FROM structure_seagoing_ship_section0_frame_arrangement_yz_drawing")) {
+        m_lastError = QString("Failed to reset YZ drawing table: %1").arg(query.lastError().text());
+        qCritical() << "FrameArrangementYZ::resetFrameYZDrawingTable() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return false;
+    }
+    qDebug() << "FrameArrangementYZ::resetFrameYZDrawingTable() - All drawing rows deleted";
+    return true;
+}
+
+QVariantList FrameArrangementYZ::getAllFrameYZDrawing()
+{
+    QVariantList result;
+    m_frameYZDrawingData.clear();
+    QSqlDatabase db = getDatabase();
+    if (!db.isValid()) {
+        m_lastError = "Ship database connection is not valid";
+        qCritical() << "FrameArrangementYZ::getAllFrameYZDrawing() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return result;
+    }
+
+    QSqlQuery query(db);
+    if (!query.exec("SELECT id, frameyz_id, name, no, spacing, y, z, frame_no, fa, sym, created_at, updated_at FROM structure_seagoing_ship_section0_frame_arrangement_yz_drawing")) {
+        m_lastError = QString("Failed to fetch YZ drawing rows: %1").arg(query.lastError().text());
+        qCritical() << "FrameArrangementYZ::getAllFrameYZDrawing() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return result;
+    }
+
+    while (query.next()) {
+        FrameYZDrawingData d;
+        d.id = query.value(0).toInt();
+        d.frameyz_id = query.value(1).toInt();
+        d.name = query.value(2).toString().toStdString();
+        d.no = query.value(3).toInt();
+        d.spacing = query.value(4).toDouble();
+        d.y = query.value(5).toDouble();
+        d.z = query.value(6).toDouble();
+        d.frame_no = query.value(7).toInt();
+        d.fa = query.value(8).toString().toStdString();
+        d.sym = query.value(9).toString().toStdString();
+        // Truncate 64-bit epoch ms to int as requested
+        d.created_at = query.value(10).toLongLong();
+        d.updated_at = query.value(11).toLongLong();
+        m_frameYZDrawingData.append(d);
+
+        QVariantMap row;
+        row["id"] = d.id;
+        row["frameyz_id"] = d.frameyz_id;
+        row["name"] = QString::fromStdString(d.name);
+        row["no"] = d.no;
+        row["spacing"] = d.spacing;
+        row["y"] = d.y;
+        row["z"] = d.z;
+        row["frame_no"] = d.frame_no;
+        row["fa"] = QString::fromStdString(d.fa);
+        row["sym"] = QString::fromStdString(d.sym);
+        row["created_at"] = d.created_at;
+        row["updated_at"] = d.updated_at;
+        result.append(row);
+    }
+
+    return result;
+}

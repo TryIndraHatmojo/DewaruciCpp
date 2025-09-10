@@ -35,6 +35,13 @@ void FrameArrangementYZController::setSelectedFrameYZName(const QJsonArray &list
 	}
 }
 
+void FrameArrangementYZController::setFrameYZDrawing(const QJsonArray &list) {
+	if (m_frameYZDrawing != list) {
+		m_frameYZDrawing = list;
+		emit frameYZDrawingChanged();
+	}
+}
+
 void FrameArrangementYZController::setModel(FrameArrangementYZ* model) {
 	m_model = model;
 }
@@ -127,5 +134,30 @@ void FrameArrangementYZController::getFrameYZByName(const QString &name) {
 	if (!m_model) { emit errorOccurred("Model not set"); return; }
 	QVariantList rows = m_model->getFramesByName(name);
 	setSelectedFrameYZName(generateObjectJson(rows));
+}
+
+// ---------------- Frame YZ Drawing (mirrors Python functions) ----------------
+int FrameArrangementYZController::insertFrameYZDrawing(int frameyzId, const QString &name, int no, double spacing,
+													 double y, double z, int frameNo, const QString &fa, const QString &sym) {
+	if (!m_model) { emit errorOccurred("Model not set"); return -1; }
+	// Ensure drawing table exists
+	m_model->createDrawingTable();
+	int id = m_model->insertFrameYZDrawing(frameyzId, name, no, spacing, y, z, frameNo, fa, sym);
+	emit frameArrangementYZDrawingChanged();
+	return id;
+}
+
+bool FrameArrangementYZController::resetFrameYZDrawing() {
+	if (!m_model) { emit errorOccurred("Model not set"); return false; }
+	bool ok = m_model->resetFrameYZDrawingTable();
+	if (ok) emit frameArrangementYZDrawingChanged();
+	return ok;
+}
+
+void FrameArrangementYZController::getAllFrameYZDrawing() {
+	if (!m_model) { emit errorOccurred("Model not set"); return; }
+	QVariantList list = m_model->getAllFrameYZDrawing();
+	setFrameYZDrawing(generateObjectJson(list));
+	emit frameArrangementYZDrawingChanged();
 }
 
