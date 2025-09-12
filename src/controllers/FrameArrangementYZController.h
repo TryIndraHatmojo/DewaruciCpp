@@ -30,7 +30,7 @@ public:
     void setSelectedFrameYZ(const QJsonArray &list);
     void setSelectedFrameYZId(const QJsonArray &list);
     void setSelectedFrameYZName(const QJsonArray &list);
-    void setFrameYZDrawing(const QJsonArray &list) { if (m_frameYZDrawing != list) { m_frameYZDrawing = list; emit frameYZDrawingChanged(); } }
+    void setFrameYZDrawing(const QJsonArray &list);
 
     // Initialize with model
     void setModel(FrameArrangementYZ* model);

@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../components/section0/FrameArrangement/InputSection/XZInput"
 import "../components/section0/FrameArrangement/InputSection/YZInput"
+import "../components/section0/FrameArrangement/Frame" as FrameSection
 
 Rectangle {
     id: frameArrangementPage
@@ -139,49 +140,10 @@ Rectangle {
                 }
             }
             
-            // Frame Y Z Graph
-            Rectangle {
+            // Frame Y Z Graph (extracted component)
+            FrameSection.YZFrame {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: "#ffffff"
-                border.color: "#cccccc"
-                border.width: 1
-                radius: 8
-                
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 15
-                    spacing: 10
-                    
-                    Text {
-                        text: "Frame Y Z"
-                        font.pixelSize: 14
-                        font.bold: true
-                        color: "#34495e"
-                    }
-                    
-                    Text {
-                        text: "Frame No.      :"
-                        font.pixelSize: 12
-                        color: "#6c757d"
-                    }
-                    
-                    // Graph area
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: "#f8f9fa"
-                        border.color: "#dee2e6"
-                        border.width: 1
-                        
-                        Text {
-                            anchors.centerIn: parent
-                            text: "No Data."
-                            color: "#6c757d"
-                            font.pixelSize: 14
-                        }
-                    }
-                }
             }
         }
     }

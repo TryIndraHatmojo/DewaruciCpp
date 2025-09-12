@@ -92,6 +92,12 @@ ColumnLayout {
                         // Row data shortcut
                         property var row: modelData
 
+                        // Column dependency validation: Y and Z are mutually exclusive
+                        property bool yHasValue: yInput.text !== "" && yInput.text !== "0"
+                        property bool zHasValue: zInput.text !== "" && zInput.text !== "0"
+                        property bool yEnabled: !zHasValue
+                        property bool zEnabled: !yHasValue
+
                         // Focus a specific column editor in this row
                         function focusColumn(col) {
                             if (col === 0) {
@@ -250,7 +256,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: yEnabled ? "transparent" : "#f0f0f0"
                                 border.color: "#bdc3c7"
                                 border.width: 0.5
                                 
@@ -262,8 +268,11 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: DoubleValidator { decimals: 3 }
                                     selectByMouse: true
+                                    enabled: yEnabled
+                                    color: yEnabled ? "#000000" : "#999999"
                                     onActiveFocusChanged: if (activeFocus) { yzList.currentIndex = index; yzList.focusedColumn = 3 }
                                     Keys.onPressed: {
+                                        if (!yEnabled) { event.accepted = true; return }
                                         if (event.key === Qt.Key_Tab) { commitUpdate(); moveHorizontal(event.modifiers & Qt.ShiftModifier ? -1 : 1); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { moveHorizontal(-1); event.accepted = true }
                                         else if (event.key === Qt.Key_Right) { moveHorizontal(1); event.accepted = true }
@@ -271,7 +280,7 @@ ColumnLayout {
                                         else if (event.key === Qt.Key_Down) { commitUpdate(); moveVertical(1); event.accepted = true }
                                         else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { commitUpdate(); moveHorizontal(1); event.accepted = true }
                                     }
-                                    onEditingFinished: commitUpdate()
+                                    onEditingFinished: if (yEnabled) commitUpdate()
                                 }
                             }
                             
@@ -279,7 +288,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: zEnabled ? "transparent" : "#f0f0f0"
                                 border.color: "#bdc3c7"
                                 border.width: 0.5
                                 
@@ -291,8 +300,11 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: DoubleValidator { decimals: 3 }
                                     selectByMouse: true
+                                    enabled: zEnabled
+                                    color: zEnabled ? "#000000" : "#999999"
                                     onActiveFocusChanged: if (activeFocus) { yzList.currentIndex = index; yzList.focusedColumn = 4 }
                                     Keys.onPressed: {
+                                        if (!zEnabled) { event.accepted = true; return }
                                         if (event.key === Qt.Key_Tab) { commitUpdate(); moveHorizontal(event.modifiers & Qt.ShiftModifier ? -1 : 1); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { moveHorizontal(-1); event.accepted = true }
                                         else if (event.key === Qt.Key_Right) { moveHorizontal(1); event.accepted = true }
@@ -300,7 +312,7 @@ ColumnLayout {
                                         else if (event.key === Qt.Key_Down) { commitUpdate(); moveVertical(1); event.accepted = true }
                                         else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { commitUpdate(); moveHorizontal(1); event.accepted = true }
                                     }
-                                    onEditingFinished: commitUpdate()
+                                    onEditingFinished: if (zEnabled) commitUpdate()
                                 }
                             }
                             
@@ -497,6 +509,12 @@ ColumnLayout {
                         property string shadowFa: "0"
                         property string shadowSym: "0"
 
+                        // Column dependency validation for shadow row
+                        property bool shadowYHasValue: shadowYInput.text !== "" && shadowYInput.text !== "0"
+                        property bool shadowZHasValue: shadowZInput.text !== "" && shadowZInput.text !== "0"
+                        property bool shadowYEnabled: !shadowZHasValue
+                        property bool shadowZEnabled: !shadowYHasValue
+
                         function lastData() {
                             var arr = frameYZController.frameYZList || []
                             if (!arr || arr.length === 0) return null
@@ -669,7 +687,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "#ffffff"
+                                color: yzShadowRow.shadowYEnabled ? "#ffffff" : "#f0f0f0"
                                 border.color: "#bdc3c7"
                                 border.width: 0.5
                                 TextInput {
@@ -680,8 +698,11 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: DoubleValidator { decimals: 3 }
                                     selectByMouse: true
+                                    enabled: yzShadowRow.shadowYEnabled
+                                    color: yzShadowRow.shadowYEnabled ? "#000000" : "#999999"
                                     onTextChanged: yzShadowRow.shadowY = parseFloat(text) || 0
                                     Keys.onPressed: {
+                                        if (!yzShadowRow.shadowYEnabled) { event.accepted = true; return }
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 4; shadowZInput.forceActiveFocus(); shadowZInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { yzList.focusedColumn = 2; shadowSpacingInput.forceActiveFocus(); shadowSpacingInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Right) { yzList.focusedColumn = 4; shadowZInput.forceActiveFocus(); shadowZInput.selectAll(); event.accepted = true }
@@ -700,7 +721,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "#ffffff"
+                                color: yzShadowRow.shadowZEnabled ? "#ffffff" : "#f0f0f0"
                                 border.color: "#bdc3c7"
                                 border.width: 0.5
                                 TextInput {
@@ -711,8 +732,11 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     validator: DoubleValidator { decimals: 3 }
                                     selectByMouse: true
+                                    enabled: yzShadowRow.shadowZEnabled
+                                    color: yzShadowRow.shadowZEnabled ? "#000000" : "#999999"
                                     onTextChanged: yzShadowRow.shadowZ = parseFloat(text) || 0
                                     Keys.onPressed: {
+                                        if (!yzShadowRow.shadowZEnabled) { event.accepted = true; return }
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 5; shadowFrameNoInput.forceActiveFocus(); shadowFrameNoInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { yzList.focusedColumn = 3; shadowYInput.forceActiveFocus(); shadowYInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Right) { yzList.focusedColumn = 5; shadowFrameNoInput.forceActiveFocus(); shadowFrameNoInput.selectAll(); event.accepted = true }

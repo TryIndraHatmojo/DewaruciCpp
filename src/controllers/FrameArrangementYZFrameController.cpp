@@ -1,0 +1,383 @@
+#include "FrameArrangementYZFrameController.h"
+#include "FrameArrangementYZController.h"
+#include <QPainter>
+#include <QPen>
+#include <QMetaObject>
+#include <QDebug>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <cmath>
+
+FrameArrangementYZFrameController::FrameArrangementYZFrameController(QQuickItem *parent)
+    : QQuickPaintedItem(parent)
+    , m_gridSpacing(20)
+    , m_currentFrameNo(-1)
+    , m_controller(nullptr)
+    , m_greenLineColor(Qt::green)
+{
+    setRenderTarget(QQuickPaintedItem::FramebufferObject);
+    setAntialiasing(true);
+}
+
+void FrameArrangementYZFrameController::paint(QPainter *painter)
+{
+    if (!painter) return;
+
+    int w = static_cast<int>(width());
+    int h = static_cast<int>(height());
+    
+    if (w <= 0 || h <= 0) return;
+
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->fillRect(0, 0, w, h, Qt::white);
+
+    // Calculate center coordinates
+    int centerX = w / 2;
+    int centerY = h / 2;
+
+    // Only draw frame lines based on table data - no default grid
+    drawFrameLines(painter, centerX, centerY, m_gridSpacing);
+}
+
+void FrameArrangementYZFrameController::drawFrameLines(QPainter *p, int centerX, int centerY, int spacing)
+{
+    // Load current frame data
+    loadFrameData();
+    
+    // Get all data without frameNo filter
+    QList<QJsonObject> allFrameData;
+    for (auto val : m_frameYZDrawing) {
+        if (val.isObject()) {
+            allFrameData.append(val.toObject());
+        }
+    }
+    
+    qDebug() << "=== DEBUG DRAW FRAME LINES (Reference Logic) ===";
+    qDebug() << "Total data available:" << allFrameData.size();
+    
+    if (allFrameData.isEmpty()) {
+        qDebug() << "❌ No data available!";
+        return;
+    }
+
+    // Draw center lines first (gray dashed like reference)
+    QPen centerPen(QColor(150, 150, 150), 1, Qt::DashLine);
+    p->setPen(centerPen);
+    p->drawLine(centerX, 0, centerX, static_cast<int>(height())); // Vertical center
+    p->drawLine(0, centerY, static_cast<int>(width()), centerY);  // Horizontal center
+
+    // Set pen for frame lines (lightgreen like reference)
+    QPen framePen(QColor(144, 238, 144), 1); // lightgreen color
+    framePen.setCosmetic(true);
+    p->setPen(framePen);
+
+    // Process each entry using reference JavaScript logic
+    for (const auto &entry : allFrameData) {
+        qDebug() << "Processing entry:" << entry;
+        
+        if (!isValidFieldData(entry)) {
+            qDebug() << "❌ Invalid field data";
+            continue;
+        }
+
+        // Get values like reference JavaScript
+        double yCoor = entry.value("y").toDouble();
+        double zCoor = entry.value("z").toDouble();
+        QString thisSym = entry.value("sym").toString();
+        QString name = entry.value("name").toString();
+        double entrySpacing = entry.value("spacing").toDouble();
+        int lineCount = entry.value("no").toInt();
+
+        qDebug() << "Y:" << yCoor << "Z:" << zCoor << "Sym:" << thisSym << "Count:" << lineCount << "Spacing:" << entrySpacing;
+
+        // Draw multiple lines based on count (like reference)
+        for (int i = 0; i < lineCount; ++i) {
+            double spacingInLoop = i * entrySpacing; // Progressive spacing like reference
+
+            // Check if yCoor is empty (Z coordinate case) - draws HORIZONTAL lines
+            if (yCoor == 0.0 && zCoor != 0.0) {
+                drawZCoordinateLines(p, centerX, centerY, spacing, zCoor, spacingInLoop, thisSym);
+            }
+            // Check if zCoor is empty (Y coordinate case) - draws VERTICAL lines
+            else if (zCoor == 0.0 && yCoor != 0.0) {
+                drawYCoordinateLines(p, centerX, centerY, spacing, yCoor, spacingInLoop, thisSym);
+            }
+        }
+    }
+    
+    qDebug() << "=== END DEBUG ===";
+}
+
+// Draw Z coordinate lines (HORIZONTAL lines) - based on reference JavaScript
+void FrameArrangementYZFrameController::drawZCoordinateLines(QPainter *p, int centerX, int centerY, int spacing, 
+                                                           double zCoor, double spacingInLoop, const QString &thisSym)
+{
+    qDebug() << "Drawing Z coordinate (HORIZONTAL) lines - zCoor:" << zCoor << "spacingInLoop:" << spacingInLoop << "sym:" << thisSym;
+
+    // Calculate Y positions for horizontal lines (like reference JavaScript)
+    int firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z;
+
+    if (thisSym == "P") {
+        // Define first point (left side)
+        firstPoint_y = centerX + -99999 * spacing;
+        firstPoint_z = centerY - static_cast<int>((zCoor + spacingInLoop) / 1000.0 * spacing);
+
+        // Define second point (to center)
+        secondPoint_y = centerX + 0 * spacing;
+        secondPoint_z = centerY - static_cast<int>((zCoor + spacingInLoop) / 1000.0 * spacing);
+
+        // Draw line
+        p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
+        qDebug() << "Drew P side horizontal line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
+    }
+    else if (thisSym == "S") {
+        // Define first point (from center)
+        firstPoint_y = centerX + 0 * spacing;
+        firstPoint_z = centerY - static_cast<int>((zCoor + spacingInLoop) / 1000.0 * spacing);
+
+        // Define second point (right side)
+        secondPoint_y = centerX + 99999 * spacing;
+        secondPoint_z = centerY - static_cast<int>((zCoor + spacingInLoop) / 1000.0 * spacing);
+
+        // Draw line
+        p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
+        qDebug() << "Drew S side horizontal line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
+    }
+    else if (thisSym == "P+S" || thisSym == "S+P") {
+        // Define first point (full width)
+        firstPoint_y = centerX + -99999 * spacing;
+        firstPoint_z = centerY - static_cast<int>((zCoor + spacingInLoop) / 1000.0 * spacing);
+
+        // Define second point (full width)
+        secondPoint_y = centerX + 99999 * spacing;
+        secondPoint_z = centerY - static_cast<int>((zCoor + spacingInLoop) / 1000.0 * spacing);
+
+        // Draw line
+        p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
+        qDebug() << "Drew P+S horizontal line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
+    }
+}
+
+// Draw Y coordinate lines (VERTICAL lines) - based on reference JavaScript  
+void FrameArrangementYZFrameController::drawYCoordinateLines(QPainter *p, int centerX, int centerY, int spacing,
+                                                           double yCoor, double spacingInLoop, const QString &thisSym)
+{
+    qDebug() << "Drawing Y coordinate (VERTICAL) lines - yCoor:" << yCoor << "spacingInLoop:" << spacingInLoop << "sym:" << thisSym;
+
+    // Calculate positions for vertical lines (like reference JavaScript)
+    int firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z;
+
+    if (thisSym == "P") {
+        // Ensure yCoor is always negative for P side
+        double yCoorNeg = -qAbs(yCoor + spacingInLoop);
+
+        // Define first point (top)
+        firstPoint_y = centerX + static_cast<int>(yCoorNeg / 1000.0 * spacing);
+        firstPoint_z = centerY - -99999 * spacing;
+
+        // Define second point (bottom)
+        secondPoint_y = centerX + static_cast<int>(yCoorNeg / 1000.0 * spacing);
+        secondPoint_z = centerY - 99999 * spacing;
+
+        // Draw line
+        p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
+        qDebug() << "Drew P side vertical line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
+    }
+    else if (thisSym == "S") {
+        // Ensure yCoor is always positive for S side
+        double yCoorPos = qAbs(yCoor + spacingInLoop);
+
+        // Define first point (top)
+        firstPoint_y = centerX + static_cast<int>(yCoorPos / 1000.0 * spacing);
+        firstPoint_z = centerY - -99999 * spacing;
+
+        // Define second point (bottom)
+        secondPoint_y = centerX + static_cast<int>(yCoorPos / 1000.0 * spacing);
+        secondPoint_z = centerY - 99999 * spacing;
+
+        // Draw line
+        p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
+        qDebug() << "Drew S side vertical line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
+    }
+    else if (thisSym == "P+S" || thisSym == "S+P") {
+        double yCoorPos = qAbs(yCoor + spacingInLoop);
+        double yCoorNeg = -qAbs(yCoor + spacingInLoop);
+
+        // Draw right line (S side)
+        firstPoint_y = centerX + static_cast<int>(yCoorPos / 1000.0 * spacing);
+        firstPoint_z = centerY - -99999 * spacing;
+        secondPoint_y = centerX + static_cast<int>(yCoorPos / 1000.0 * spacing);
+        secondPoint_z = centerY - 99999 * spacing;
+        p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
+        qDebug() << "Drew P+S right vertical line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
+
+        // Draw left line (P side)
+        firstPoint_y = centerX + static_cast<int>(yCoorNeg / 1000.0 * spacing);
+        firstPoint_z = centerY - -99999 * spacing;
+        secondPoint_y = centerX + static_cast<int>(yCoorNeg / 1000.0 * spacing);
+        secondPoint_z = centerY - 99999 * spacing;
+        p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
+        qDebug() << "Drew P+S left vertical line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
+    }
+}
+
+// Validation and calculation helper functions
+bool FrameArrangementYZFrameController::isValidFieldData(const QJsonObject& fieldData) const
+{
+    bool hasNo = fieldData.contains("no");
+    bool hasYorZ = fieldData.contains("y") || fieldData.contains("z");
+    bool hasSpacing = fieldData.contains("spacing");
+    bool hasSym = fieldData.contains("sym");
+    
+    qDebug() << "Validation - hasNo:" << hasNo << "hasYorZ:" << hasYorZ 
+             << "hasSpacing:" << hasSpacing << "hasSym:" << hasSym;
+    qDebug() << "Field data keys:" << fieldData.keys();
+    
+    return hasNo && hasYorZ && hasSpacing && hasSym;
+}
+
+int FrameArrangementYZFrameController::calculateLineCount(const QJsonObject& fieldData) const
+{
+    if (!fieldData.contains("no")) return 0;
+    return qMax(0, fieldData.value("no").toInt());
+}
+
+double FrameArrangementYZFrameController::calculateLineSpacing(const QJsonObject& fieldData) const
+{
+    if (!fieldData.contains("spacing")) return 0.0;
+    return fieldData.value("spacing").toDouble();
+}
+
+QList<double> FrameArrangementYZFrameController::calculateLinePositions(double startValue, int lineCount, double spacing) const
+{
+    QList<double> positions;
+    if (lineCount <= 0) return positions;
+
+    if (lineCount == 1) {
+        positions.append(startValue);
+    } else {
+        for (int i = 0; i < lineCount; ++i) {
+            positions.append(startValue + i * spacing);
+        }
+    }
+    return positions;
+}
+
+bool FrameArrangementYZFrameController::hasYValue(const QJsonObject& fieldData) const
+{
+    if (!fieldData.contains("y")) return false;
+    
+    // Periksa nilai numerik terlebih dahulu
+    QJsonValue yValue = fieldData.value("y");
+    if (yValue.isDouble()) {
+        double y = yValue.toDouble();
+        return y != 0.0; // Y dianggap ada jika tidak 0
+    }
+    
+    // Fallback ke string check
+    QString yStr = yValue.toString();
+    bool isEmpty = yStr.isEmpty() || yStr == "0" || yStr == "0.0";
+    
+    qDebug() << "Y value check - raw:" << yValue << "string:" << yStr << "isEmpty:" << isEmpty;
+    return !isEmpty;
+}
+
+bool FrameArrangementYZFrameController::hasZValue(const QJsonObject& fieldData) const
+{
+    if (!fieldData.contains("z")) return false;
+    
+    // Periksa nilai numerik terlebih dahulu
+    QJsonValue zValue = fieldData.value("z");
+    if (zValue.isDouble()) {
+        double z = zValue.toDouble();
+        return z != 0.0; // Z dianggap ada jika tidak 0
+    }
+    
+    // Fallback ke string check
+    QString zStr = zValue.toString();
+    bool isEmpty = zStr.isEmpty() || zStr == "0" || zStr == "0.0";
+    
+    qDebug() << "Z value check - raw:" << zValue << "string:" << zStr << "isEmpty:" << isEmpty;
+    return !isEmpty;
+}
+
+void FrameArrangementYZFrameController::loadFrameData()
+{
+    if (!m_controller) return;
+
+    // Get all frame YZ data from main table
+    QMetaObject::invokeMethod(m_controller, "getFrameYZAll", Qt::DirectConnection);
+    
+    // Get the frameYZList property (contains all data)
+    QVariant allData = m_controller->property("frameYZList");
+    if (allData.canConvert<QJsonArray>()) {
+        m_frameYZDrawing = allData.toJsonArray();
+    }
+}
+
+QList<QJsonObject> FrameArrangementYZFrameController::getFrameDataForCurrentFrame() const
+{
+    QList<QJsonObject> currentFrameData;
+    
+    if (m_currentFrameNo < 0) return currentFrameData;
+
+    // Filter data from m_frameYZDrawing (which now contains all YZ data)
+    for (auto val : m_frameYZDrawing) {
+        if (!val.isObject()) continue;
+        QJsonObject obj = val.toObject();
+        int frameNo = obj.value("frameNo").toInt(); // Note: property name might be "frameNo" instead of "frame_no"
+        if (frameNo == m_currentFrameNo) {
+            currentFrameData.append(obj);
+        }
+    }
+
+    return currentFrameData;
+}
+
+// Property setters
+void FrameArrangementYZFrameController::setGridSpacing(int spacing)
+{
+    if (m_gridSpacing != spacing) {
+        m_gridSpacing = spacing;
+        emit gridSpacingChanged();
+        update();
+    }
+}
+
+void FrameArrangementYZFrameController::setCurrentFrameNo(int frameNo)
+{
+    if (m_currentFrameNo != frameNo) {
+        m_currentFrameNo = frameNo;
+        emit currentFrameNoChanged();
+        update();
+    }
+}
+
+void FrameArrangementYZFrameController::setFrameController(QObject* controller)
+{
+    if (m_controller != controller) {
+        m_controller = controller;
+        emit frameControllerChanged();
+        update();
+    }
+}
+
+void FrameArrangementYZFrameController::setGreenLineColor(const QColor& color)
+{
+    if (m_greenLineColor != color) {
+        m_greenLineColor = color;
+        emit greenLineColorChanged();
+        update();
+    }
+}
+
+void FrameArrangementYZFrameController::regenerateDrawingData()
+{
+    if (!m_controller) return;
+
+    // Simply refresh data from main table
+    QMetaObject::invokeMethod(m_controller, "getFrameYZAll", Qt::DirectConnection);
+    
+    // Refresh the display
+    update();
+}
