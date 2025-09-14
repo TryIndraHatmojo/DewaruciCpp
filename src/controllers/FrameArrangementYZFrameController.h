@@ -46,6 +46,7 @@ signals:
 private:
     // Drawing functions
     void drawFrameLines(QPainter *p, int centerX, int centerY, int spacing);
+    void drawShipOutline(QPainter *p, int centerX, int centerY, int spacing);
     
     // Drawing helper functions for Y and Z coordinates (based on reference JavaScript)
     void drawZCoordinateLines(QPainter *p, int centerX, int centerY, int spacing, 

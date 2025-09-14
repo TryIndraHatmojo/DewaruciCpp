@@ -49,7 +49,22 @@ void FrameArrangementYZController::setModel(FrameArrangementYZ* model) {
 static QJsonArray toJsonArray(const QVariantList &list) {
 	QJsonArray array;
 	for (const QVariant &v : list) {
-		array.append(QJsonObject::fromVariantMap(v.toMap()));
+		QVariantMap m = v.toMap();
+		QJsonObject o = QJsonObject::fromVariantMap(m);
+		// Ensure y/z keep string empties if provided by model
+		if (m.contains("y")) {
+			QVariant yv = m.value("y");
+			if (yv.typeId() == QMetaType::QString) {
+				o.insert("y", yv.toString());
+			}
+		}
+		if (m.contains("z")) {
+			QVariant zv = m.value("z");
+			if (zv.typeId() == QMetaType::QString) {
+				o.insert("z", zv.toString());
+			}
+		}
+		array.append(o);
 	}
 	return array;
 }
@@ -59,7 +74,7 @@ QJsonArray FrameArrangementYZController::generateObjectJson(const QVariantList &
 }
 
 int FrameArrangementYZController::insertFrameYZ(const QString &name, int no, double spacing,
-													double y, double z, int frameNo, const QString &fa, const QString &sym) {
+													const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym) {
 	if (!m_model) { emit errorOccurred("Model not set"); return -1; }
 	int lastId = m_model->insertFrame(name, no, spacing, y, z, frameNo, fa, sym);
 	// Reload full list after insert
@@ -84,7 +99,7 @@ void FrameArrangementYZController::deleteFrameYZ(int id) {
 }
 
 void FrameArrangementYZController::updateFrameYZ(int id, const QString &name, int no, double spacing,
-												 double y, double z, int frameNo, const QString &fa, const QString &sym) {
+												 const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym) {
 	if (!m_model) { emit errorOccurred("Model not set"); return; }
 	if (m_model->updateFrame(id, name, no, spacing, y, z, frameNo, fa, sym)) {
 		getFrameYZAll();

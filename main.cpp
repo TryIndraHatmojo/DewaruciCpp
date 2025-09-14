@@ -11,6 +11,8 @@
 #include "src/controllers/StructureProfileTableController.h"
 #include "src/controllers/FrameArrangementXZController.h"
 #include "src/controllers/FrameArrangementYZController.h"
+#include "src/controllers/FrameArrangementYZFrameController.h"
+#include <QQmlEngine>
 
 int main(int argc, char *argv[])
 {
@@ -67,6 +69,9 @@ int main(int argc, char *argv[])
     }
 
     QQmlApplicationEngine engine;
+
+    // Register custom painted item for YZ frame drawing
+    qmlRegisterType<FrameArrangementYZFrameController>("DewaruciCpp", 1, 0, "FrameArrangementYZFrameController");
     
     // Register model instances to QML
     engine.rootContext()->setContextProperty("materialModel", materialModel);

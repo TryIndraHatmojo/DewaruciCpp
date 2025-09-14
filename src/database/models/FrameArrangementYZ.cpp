@@ -135,8 +135,9 @@ bool FrameArrangementYZ::loadData()
         frame.name = query.value(1).toString();
         frame.no = query.value(2).toInt();
         frame.spacing = query.value(3).toDouble();
-        frame.y = query.value(4).toDouble();
-        frame.z = query.value(5).toDouble();
+        // Preserve original variant types for y/z so empty string can be shown
+        frame.y = query.value(4);
+        frame.z = query.value(5);
         frame.frameNo = query.value(6).toInt();
     frame.fa = query.value(7).toString();
     frame.sym = query.value(8).toString();
@@ -183,8 +184,8 @@ bool FrameArrangementYZ::loadDataByFrameNo(int frameNumber)
         frame.name = query.value(1).toString();
         frame.no = query.value(2).toInt();
         frame.spacing = query.value(3).toDouble();
-        frame.y = query.value(4).toDouble();
-        frame.z = query.value(5).toDouble();
+        frame.y = query.value(4);
+        frame.z = query.value(5);
         frame.frameNo = query.value(6).toInt();
     frame.fa = query.value(7).toString();
     frame.sym = query.value(8).toString();
@@ -202,7 +203,7 @@ bool FrameArrangementYZ::loadDataByFrameNo(int frameNumber)
 }
 
 int FrameArrangementYZ::insertFrame(const QString &name, int no, double spacing,
-                                   double y, double z, int frameNo, const QString &fa, const QString &sym)
+                                   const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -220,6 +221,7 @@ int FrameArrangementYZ::insertFrame(const QString &name, int no, double spacing,
     query.addBindValue(name);
     query.addBindValue(no);
     query.addBindValue(spacing);
+    // Bind y/z as provided: empty string stays empty, number as double
     query.addBindValue(y);
     query.addBindValue(z);
     query.addBindValue(frameNo);
@@ -240,7 +242,7 @@ int FrameArrangementYZ::insertFrame(const QString &name, int no, double spacing,
 }
 
 bool FrameArrangementYZ::updateFrame(int id, const QString &name, int no, double spacing,
-                                    double y, double z, int frameNo, const QString &fa, const QString &sym)
+                                    const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym)
 {
     QSqlDatabase db = getDatabase();
     if (!db.isValid()) {
@@ -412,8 +414,9 @@ QVariantMap FrameArrangementYZ::getFrameById(int id)
         result["name"] = query.value(1).toString();
         result["no"] = query.value(2).toInt();
         result["spacing"] = query.value(3).toDouble();
-        result["y"] = query.value(4).toDouble();
-        result["z"] = query.value(5).toDouble();
+        // Keep original variant for y/z
+        result["y"] = query.value(4);
+        result["z"] = query.value(5);
     result["frameNo"] = query.value(6).toInt();
     result["fa"] = query.value(7).toString();
     result["sym"] = query.value(8).toString();
@@ -453,9 +456,9 @@ QVariantList FrameArrangementYZ::getFramesByName(const QString &name)
         frame["id"] = query.value(0).toInt();
         frame["name"] = query.value(1).toString();
         frame["no"] = query.value(2).toInt();
-        frame["spacing"] = query.value(3).toDouble();
-        frame["y"] = query.value(4).toDouble();
-        frame["z"] = query.value(5).toDouble();
+    frame["spacing"] = query.value(3).toDouble();
+    frame["y"] = query.value(4);
+    frame["z"] = query.value(5);
     frame["frameNo"] = query.value(6).toInt();
     frame["fa"] = query.value(7).toString();
     frame["sym"] = query.value(8).toString();
@@ -496,9 +499,9 @@ QVariantList FrameArrangementYZ::getFramesByFrameNo(int frameNumber)
         frame["id"] = query.value(0).toInt();
         frame["name"] = query.value(1).toString();
         frame["no"] = query.value(2).toInt();
-        frame["spacing"] = query.value(3).toDouble();
-        frame["y"] = query.value(4).toDouble();
-        frame["z"] = query.value(5).toDouble();
+    frame["spacing"] = query.value(3).toDouble();
+    frame["y"] = query.value(4);
+    frame["z"] = query.value(5);
     frame["frameNo"] = query.value(6).toInt();
     frame["fa"] = query.value(7).toString();
     frame["sym"] = query.value(8).toString();

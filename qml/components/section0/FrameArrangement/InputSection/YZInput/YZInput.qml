@@ -93,8 +93,10 @@ ColumnLayout {
                         property var row: modelData
 
                         // Column dependency validation: Y and Z are mutually exclusive
-                        property bool yHasValue: yInput.text !== "" && yInput.text !== "0"
-                        property bool zHasValue: zInput.text !== "" && zInput.text !== "0"
+                        // Y has value if not empty string (0 is valid value)
+                        property bool yHasValue: yInput.text !== ""
+                        // Z has value if not empty string (0 is valid value)  
+                        property bool zHasValue: zInput.text !== ""
                         property bool yEnabled: !zHasValue
                         property bool zEnabled: !yHasValue
 
@@ -127,10 +129,11 @@ ColumnLayout {
                             if (isNaN(noVal)) noVal = 0
                             var spacingVal = parseFloat(spacingInput.text)
                             if (isNaN(spacingVal)) spacingVal = 0
-                            var yVal = parseFloat(yInput.text)
-                            if (isNaN(yVal)) yVal = 0
-                            var zVal = parseFloat(zInput.text)
-                            if (isNaN(zVal)) zVal = 0
+                            
+                            // Handle Y and Z as strings - empty if not filled, numeric if filled
+                            var yVal = yInput.text.trim() === "" ? "" : parseFloat(yInput.text) 
+                            var zVal = zInput.text.trim() === "" ? "" : parseFloat(zInput.text)
+                            
                             var frameNoVal = parseInt(frameNoInput.text)
                             if (isNaN(frameNoVal)) frameNoVal = 0
                             // Pass FA/Sym as their string labels now
@@ -264,13 +267,19 @@ ColumnLayout {
                                     id: yInput
                                     anchors.fill: parent
                                     anchors.margins: 4
-                                    text: (row && row.y !== undefined) ? row.y : "0"
+                                    text: (row && row.y !== undefined && row.y !== null && row.y !== "") ? String(row.y) : ""
                                     font.pixelSize: 10
                                     validator: DoubleValidator { decimals: 3 }
                                     selectByMouse: true
                                     enabled: yEnabled
                                     color: yEnabled ? "#000000" : "#999999"
                                     onActiveFocusChanged: if (activeFocus) { yzList.currentIndex = index; yzList.focusedColumn = 3 }
+                                    onTextChanged: {
+                                        // If Y has value (not empty), clear Z
+                                        if (yInput.text !== "" && zInput.text !== "") {
+                                            zInput.text = ""
+                                        }
+                                    }
                                     Keys.onPressed: {
                                         if (!yEnabled) { event.accepted = true; return }
                                         if (event.key === Qt.Key_Tab) { commitUpdate(); moveHorizontal(event.modifiers & Qt.ShiftModifier ? -1 : 1); event.accepted = true }
@@ -296,13 +305,19 @@ ColumnLayout {
                                     id: zInput
                                     anchors.fill: parent
                                     anchors.margins: 4
-                                    text: (row && row.z !== undefined) ? row.z : "0"
+                                    text: (row && row.z !== undefined && row.z !== null && row.z !== "") ? String(row.z) : ""
                                     font.pixelSize: 10
                                     validator: DoubleValidator { decimals: 3 }
                                     selectByMouse: true
                                     enabled: zEnabled
                                     color: zEnabled ? "#000000" : "#999999"
                                     onActiveFocusChanged: if (activeFocus) { yzList.currentIndex = index; yzList.focusedColumn = 4 }
+                                    onTextChanged: {
+                                        // If Z has value (not empty), clear Y
+                                        if (zInput.text !== "" && yInput.text !== "") {
+                                            yInput.text = ""
+                                        }
+                                    }
                                     Keys.onPressed: {
                                         if (!zEnabled) { event.accepted = true; return }
                                         if (event.key === Qt.Key_Tab) { commitUpdate(); moveHorizontal(event.modifiers & Qt.ShiftModifier ? -1 : 1); event.accepted = true }
@@ -510,8 +525,10 @@ ColumnLayout {
                         property string shadowSym: "0"
 
                         // Column dependency validation for shadow row
-                        property bool shadowYHasValue: shadowYInput.text !== "" && shadowYInput.text !== "0"
-                        property bool shadowZHasValue: shadowZInput.text !== "" && shadowZInput.text !== "0"
+                        // Y has value if not empty string (0 is valid value)
+                        property bool shadowYHasValue: shadowYInput.text !== ""
+                        // Z has value if not empty string (0 is valid value)
+                        property bool shadowZHasValue: shadowZInput.text !== ""
                         property bool shadowYEnabled: !shadowZHasValue
                         property bool shadowZEnabled: !shadowYHasValue
 
@@ -549,8 +566,11 @@ ColumnLayout {
                             var nameVal = shadowNameInput.text || "L0"
                             var noVal = parseInt(shadowNoInput.text); if (isNaN(noVal)) noVal = 0
                             var spacingVal = parseFloat(shadowSpacingInput.text); if (isNaN(spacingVal)) spacingVal = 0
-                            var yVal = parseFloat(shadowYInput.text); if (isNaN(yVal)) yVal = 0
-                            var zVal = parseFloat(shadowZInput.text); if (isNaN(zVal)) zVal = 0
+                            
+                            // Handle Y and Z as strings - empty if not filled, numeric if filled
+                            var yVal = shadowYInput.text.trim() === "" ? "" : parseFloat(shadowYInput.text)
+                            var zVal = shadowZInput.text.trim() === "" ? "" : parseFloat(shadowZInput.text)
+                            
                             var frameNoVal = parseInt(shadowFrameNoInput.text); if (isNaN(frameNoVal)) frameNoVal = 0
                             var faVal = shadowFaComboBox.currentText || "F"
                             var symVal = shadowSymComboBox.currentText || "P"
@@ -700,7 +720,13 @@ ColumnLayout {
                                     selectByMouse: true
                                     enabled: yzShadowRow.shadowYEnabled
                                     color: yzShadowRow.shadowYEnabled ? "#000000" : "#999999"
-                                    onTextChanged: yzShadowRow.shadowY = parseFloat(text) || 0
+                                    onTextChanged: {
+                                        yzShadowRow.shadowY = parseFloat(text) || 0
+                                        // If Y has value (not empty), clear Z
+                                        if (shadowYInput.text !== "" && shadowZInput.text !== "") {
+                                            shadowZInput.text = ""
+                                        }
+                                    }
                                     Keys.onPressed: {
                                         if (!yzShadowRow.shadowYEnabled) { event.accepted = true; return }
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 4; shadowZInput.forceActiveFocus(); shadowZInput.selectAll(); event.accepted = true }
@@ -734,7 +760,13 @@ ColumnLayout {
                                     selectByMouse: true
                                     enabled: yzShadowRow.shadowZEnabled
                                     color: yzShadowRow.shadowZEnabled ? "#000000" : "#999999"
-                                    onTextChanged: yzShadowRow.shadowZ = parseFloat(text) || 0
+                                    onTextChanged: {
+                                        yzShadowRow.shadowZ = parseFloat(text) || 0
+                                        // If Z has value (not empty), clear Y
+                                        if (shadowZInput.text !== "" && shadowYInput.text !== "") {
+                                            shadowYInput.text = ""
+                                        }
+                                    }
                                     Keys.onPressed: {
                                         if (!yzShadowRow.shadowZEnabled) { event.accepted = true; return }
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 5; shadowFrameNoInput.forceActiveFocus(); shadowFrameNoInput.selectAll(); event.accepted = true }

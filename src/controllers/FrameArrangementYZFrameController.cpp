@@ -60,14 +60,14 @@ void FrameArrangementYZFrameController::drawFrameLines(QPainter *p, int centerX,
         return;
     }
 
-    // Draw center lines first (gray dashed like reference)
-    QPen centerPen(QColor(150, 150, 150), 1, Qt::DashLine);
+    // Draw center lines first (black solid line)
+    QPen centerPen(Qt::black, 1, Qt::SolidLine);
     p->setPen(centerPen);
     p->drawLine(centerX, 0, centerX, static_cast<int>(height())); // Vertical center
     p->drawLine(0, centerY, static_cast<int>(width()), centerY);  // Horizontal center
 
-    // Set pen for frame lines (lightgreen like reference)
-    QPen framePen(QColor(144, 238, 144), 1); // lightgreen color
+    // Set pen for frame lines (use configured green color)
+    QPen framePen(m_greenLineColor, 1);
     framePen.setCosmetic(true);
     p->setPen(framePen);
 
@@ -90,22 +90,71 @@ void FrameArrangementYZFrameController::drawFrameLines(QPainter *p, int centerX,
 
         qDebug() << "Y:" << yCoor << "Z:" << zCoor << "Sym:" << thisSym << "Count:" << lineCount << "Spacing:" << entrySpacing;
 
+        // Determine initial offset rule when value equals 0: start from spacing (skip 0)
+        bool yStartsAtZero = qFuzzyIsNull(yCoor);
+        bool zStartsAtZero = qFuzzyIsNull(zCoor);
+
         // Draw multiple lines based on count (like reference)
         for (int i = 0; i < lineCount; ++i) {
-            double spacingInLoop = i * entrySpacing; // Progressive spacing like reference
+            // Progressive spacing like reference, with zero rule applied per axis below
+            double spacingInLoop = i * entrySpacing;
 
-            // Check if yCoor is empty (Z coordinate case) - draws HORIZONTAL lines
-            if (yCoor == 0.0 && zCoor != 0.0) {
-                drawZCoordinateLines(p, centerX, centerY, spacing, zCoor, spacingInLoop, thisSym);
+            // Check if Y is empty/not set and Z has value (including 0) - draws HORIZONTAL lines
+            if (!hasYValue(entry) && hasZValue(entry)) {
+                // If z==0, skip drawing at 0 by shifting first iteration by +spacing
+                double effectiveSpacing = spacingInLoop + ((zStartsAtZero && i == 0) ? entrySpacing : 0.0);
+                drawZCoordinateLines(p, centerX, centerY, spacing, zCoor, effectiveSpacing, thisSym);
             }
-            // Check if zCoor is empty (Y coordinate case) - draws VERTICAL lines
-            else if (zCoor == 0.0 && yCoor != 0.0) {
-                drawYCoordinateLines(p, centerX, centerY, spacing, yCoor, spacingInLoop, thisSym);
+            // Check if Z is empty/not set and Y has value (including 0) - draws VERTICAL lines
+            else if (!hasZValue(entry) && hasYValue(entry)) {
+                // If y==0, skip drawing at 0 by shifting first iteration by +spacing
+                double effectiveSpacing = spacingInLoop + ((yStartsAtZero && i == 0) ? entrySpacing : 0.0);
+                drawYCoordinateLines(p, centerX, centerY, spacing, yCoor, effectiveSpacing, thisSym);
             }
         }
     }
     
+    // Draw ship outline last so it stays clearly visible as boundary
+    drawShipOutline(p, centerX, centerY, spacing);
+
     qDebug() << "=== END DEBUG ===";
+}
+
+// Draw ship outline: black rectangle centered at origin.
+// Width total = 24384 (left/right half = 12192), Height total = 5490.
+// Uses same mm->px scaling as lines: px = (mm/1000) * spacing.
+void FrameArrangementYZFrameController::drawShipOutline(QPainter *p, int centerX, int centerY, int spacing)
+{
+    // Half-width in mm and full height in mm
+    const double halfWidthMM = 24384.0 / 2.0; // 12192
+    const double heightMM = 5490.0;
+
+    // Convert to pixels based on grid spacing scale (1000 mm per spacing unit)
+    const double scale = spacing / 1000.0;
+    const int halfWidthPx = static_cast<int>(halfWidthMM * scale);
+    const int halfHeightPx = static_cast<int>((heightMM / 2.0) * scale);
+
+    // Points matching the JS reference (draw each side explicitly)
+    const QPoint rightBottom(centerX + halfWidthPx, centerY - static_cast<int>(0 * scale));
+    const QPoint rightTop(centerX + halfWidthPx, centerY - static_cast<int>(heightMM * scale));
+    const QPoint leftBottom(centerX - halfWidthPx, centerY - static_cast<int>(0 * scale));
+    const QPoint leftTop(centerX - halfWidthPx, centerY - static_cast<int>(heightMM * scale));
+
+    QPen prev = p->pen();
+    QPen outlinePen(Qt::black, 2, Qt::SolidLine);
+    outlinePen.setCosmetic(true);
+    p->setPen(outlinePen);
+
+    // Right line
+    p->drawLine(rightBottom, rightTop);
+    // Top line
+    p->drawLine(rightTop, leftTop);
+    // Left line
+    p->drawLine(leftBottom, leftTop);
+    // Bottom line
+    p->drawLine(leftBottom, rightBottom);
+
+    p->setPen(prev);
 }
 
 // Draw Z coordinate lines (HORIZONTAL lines) - based on reference JavaScript
@@ -267,38 +316,40 @@ bool FrameArrangementYZFrameController::hasYValue(const QJsonObject& fieldData) 
 {
     if (!fieldData.contains("y")) return false;
     
-    // Periksa nilai numerik terlebih dahulu
+    // Check if Y field is set and not empty string
     QJsonValue yValue = fieldData.value("y");
-    if (yValue.isDouble()) {
-        double y = yValue.toDouble();
-        return y != 0.0; // Y dianggap ada jika tidak 0
+    if (yValue.isString()) {
+        QString yStr = yValue.toString();
+        bool isEmpty = yStr.isEmpty();
+        qDebug() << "Y value check - string:" << yStr << "isEmpty:" << isEmpty;
+        return !isEmpty; // Return true if not empty string (including "0")
+    } else if (yValue.isDouble() || yValue.isNull()) {
+        // For numeric values, always return true (including 0.0)
+        qDebug() << "Y value check - numeric:" << yValue.toDouble() << "- returning true";
+        return true;
     }
     
-    // Fallback ke string check
-    QString yStr = yValue.toString();
-    bool isEmpty = yStr.isEmpty() || yStr == "0" || yStr == "0.0";
-    
-    qDebug() << "Y value check - raw:" << yValue << "string:" << yStr << "isEmpty:" << isEmpty;
-    return !isEmpty;
+    return false;
 }
 
 bool FrameArrangementYZFrameController::hasZValue(const QJsonObject& fieldData) const
 {
     if (!fieldData.contains("z")) return false;
     
-    // Periksa nilai numerik terlebih dahulu
+    // Check if Z field is set and not empty string
     QJsonValue zValue = fieldData.value("z");
-    if (zValue.isDouble()) {
-        double z = zValue.toDouble();
-        return z != 0.0; // Z dianggap ada jika tidak 0
+    if (zValue.isString()) {
+        QString zStr = zValue.toString();
+        bool isEmpty = zStr.isEmpty();
+        qDebug() << "Z value check - string:" << zStr << "isEmpty:" << isEmpty;
+        return !isEmpty; // Return true if not empty string (including "0")
+    } else if (zValue.isDouble() || zValue.isNull()) {
+        // For numeric values, always return true (including 0.0)
+        qDebug() << "Z value check - numeric:" << zValue.toDouble() << "- returning true";
+        return true;
     }
     
-    // Fallback ke string check
-    QString zStr = zValue.toString();
-    bool isEmpty = zStr.isEmpty() || zStr == "0" || zStr == "0.0";
-    
-    qDebug() << "Z value check - raw:" << zValue << "string:" << zStr << "isEmpty:" << isEmpty;
-    return !isEmpty;
+    return false;
 }
 
 void FrameArrangementYZFrameController::loadFrameData()

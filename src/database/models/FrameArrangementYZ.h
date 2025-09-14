@@ -7,6 +7,7 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDebug>
+#include <QVariant>
 #include <string>
 
 class FrameArrangementYZ : public QAbstractListModel
@@ -33,8 +34,8 @@ public:
         QString name;
         int no;
         double spacing;
-        double y;
-        double z;
+    QVariant y; // allow empty string or number
+    QVariant z; // allow empty string or number
         int frameNo;
     QString fa;   // TEXT in DB
     QString sym;  // TEXT in DB
@@ -54,9 +55,9 @@ public:
     Q_INVOKABLE bool loadData();
     Q_INVOKABLE bool loadDataByFrameNo(int frameNumber);
     Q_INVOKABLE int insertFrame(const QString &name, int no, double spacing, 
-                               double y, double z, int frameNo, const QString &fa, const QString &sym);
+                               const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym);
     Q_INVOKABLE bool updateFrame(int id, const QString &name, int no, double spacing,
-                                double y, double z, int frameNo, const QString &fa, const QString &sym);
+                                const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym);
     Q_INVOKABLE bool updateFrameFa(int id, const QString &fa);
     Q_INVOKABLE bool updateFrameSym(int id, const QString &sym);
     Q_INVOKABLE bool deleteFrame(int id);

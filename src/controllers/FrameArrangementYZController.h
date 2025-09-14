@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QVariant>
 
 class FrameArrangementYZ;
 
@@ -38,11 +39,11 @@ public:
 public slots:
     // CRUD & queries (mirroring the Python reference)
     Q_INVOKABLE int insertFrameYZ(const QString &name, int no, double spacing,
-                                  double y, double z, int frameNo, const QString &fa, const QString &sym);
+                                  const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym);
     Q_INVOKABLE void getFrameYZByFrameNo(int frameNumber);
     Q_INVOKABLE void deleteFrameYZ(int id);
     Q_INVOKABLE void updateFrameYZ(int id, const QString &name, int no, double spacing,
-                                   double y, double z, int frameNo, const QString &fa, const QString &sym);
+                                   const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym);
     Q_INVOKABLE void updateFrameYZFa(int id, const QString &fa);
     Q_INVOKABLE void updateFrameYZSym(int id, const QString &sym);
     Q_INVOKABLE void deleteFrameYZByFrameNumber(int frameNo);
