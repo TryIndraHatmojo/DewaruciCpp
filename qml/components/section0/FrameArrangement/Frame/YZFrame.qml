@@ -68,6 +68,7 @@ Rectangle {
 			panY: 0
 
 			// Tombol kecil overlay pojok untuk regenerate data drawing
+			/*
 			Button {
 				id: regenBtn
 				text: "Gen"
@@ -79,7 +80,7 @@ Rectangle {
 				ToolTip.visible: hovered
 				ToolTip.text: "Regenerasi data drawing (reset + insert)"
 			}
-
+			*/
 			// Auto-refresh when frame number changes
 			onCurrentFrameNoChanged: {
 				if (frameController) {
@@ -169,11 +170,63 @@ Rectangle {
 			}
 		}
 
-		// Usage hints
-		Text {
-			text: (yzFrameRoot.infoText && yzFrameRoot.infoText.length > 0) ? yzFrameRoot.infoText : "Wheel: Zoom (cursor-focused). Left-drag: Pan. Click Gen if view looks stale."
-			font.pixelSize: 10
-			color: "#000000"
+		// Info coordinate banner (shows when a line is clicked)
+		Rectangle {
+			id: infoBanner
+			Layout.fillWidth: true
+			visible: yzFrameRoot.infoText && yzFrameRoot.infoText.length > 0
+			color: "#2c3e50"            // light blue background
+			border.color: "#2c3e50"     // soft blue border
+			border.width: 1
+			radius: 6
+			height: implicitHeight
+			implicitHeight: infoRow.implicitHeight + 10
+			RowLayout {
+				id: infoRow
+				anchors.fill: parent
+				anchors.leftMargin: 8
+				spacing: 8
+				// Info badge
+				// Rectangle {
+				// 	width: 18; height: 18; radius: 9
+				// 	color: "#4aa3df"
+				// 	Text { anchors.centerIn: parent; text: "i"; color: "white"; font.pixelSize: 12; font.bold: true }
+				// }
+				Text {
+					text: yzFrameRoot.infoText
+					Layout.fillWidth: true
+					wrapMode: Text.WordWrap
+					font.pixelSize: 12
+					color: "#ddd"
+					font.bold: true
+				}
+				ToolButton {
+					text: "✕"
+					font.pixelSize: 12
+					onClicked: yzFrameRoot.infoText = ""
+				}
+			}
+		}
+
+		// Usage hints (static card)
+		Rectangle {
+			Layout.fillWidth: true
+			color: "#f8f9fa"
+			border.color: "#e0e0e0"
+			border.width: 1
+			radius: 6
+			height: implicitHeight
+			implicitHeight: usageCol.implicitHeight + 10
+			ColumnLayout {
+				id: usageCol
+				anchors.fill: parent
+				anchors.margins: 8
+				spacing: 4
+				Text { text: "Tips"; font.bold: true; font.pixelSize: 12; color: "#2c3e50" }
+				Text { text: "• Mouse Wheel: Zoom in/out"; font.pixelSize: 11; color: "#6c757d" }
+				Text { text: "• Hold Left Button + Drag: Pan"; font.pixelSize: 11; color: "#6c757d" }
+				Text { text: "• Click a line to see its coordinates"; font.pixelSize: 11; color: "#6c757d" }
+			}
 		}
 
 		// Try to auto-connect to sibling YZInput if available in parent scope
