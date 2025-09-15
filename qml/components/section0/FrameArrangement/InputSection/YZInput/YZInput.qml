@@ -7,6 +7,9 @@ ColumnLayout {
     Layout.fillHeight: true
     spacing: 10
     
+    // Signal to notify frame drawing to refresh when data changes
+    signal dataChanged()
+    
     Text {
         text: "Frame Y Z Table"
         font.pixelSize: 14
@@ -140,6 +143,11 @@ ColumnLayout {
                             var faVal = faComboBox.currentText || (row.fa || "F")
                             var symVal = symComboBox.currentText || (row.sym || "P")
                             frameYZController.updateFrameYZ(row.id, nameVal, noVal, spacingVal, yVal, zVal, frameNoVal, faVal, symVal)
+                            
+                            // Emit signal to notify drawing refresh needed
+                            Qt.callLater(function() {
+                                dataChanged()
+                            })
                         }
 
                         function moveHorizontal(dir) {
@@ -575,7 +583,10 @@ ColumnLayout {
                             var faVal = shadowFaComboBox.currentText || "F"
                             var symVal = shadowSymComboBox.currentText || "P"
                             frameYZController.insertFrameYZ(nameVal, noVal, spacingVal, yVal, zVal, frameNoVal, faVal, symVal)
+                            
+                            // Emit signal to notify drawing refresh needed
                             Qt.callLater(function() {
+                                dataChanged()
                                 if (shadowNameInput) { shadowNameInput.forceActiveFocus(); shadowNameInput.selectAll() }
                             })
                         }

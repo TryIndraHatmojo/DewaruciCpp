@@ -45,6 +45,7 @@ Rectangle {
                 
                 // Frame Y Z Table
                 YZInput {
+                    id: yzInputComponent
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
@@ -142,9 +143,18 @@ Rectangle {
             
             // Frame Y Z Graph (extracted component)
             FrameSection.YZFrame {
+                id: yzFrameComponent
                 Layout.fillWidth: true
                 Layout.fillHeight: true
             }
         }
+    }
+    
+    // Signal connection for auto-refresh functionality
+    Component.onCompleted: {
+        // Connect YZInput data changes to YZFrame refresh
+        yzInputComponent.dataChanged.connect(function() {
+            yzFrameComponent.graphArea.regenerateDrawingData()
+        })
     }
 }
