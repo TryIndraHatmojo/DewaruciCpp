@@ -20,6 +20,12 @@ Rectangle {
 
 	// Public API (can be wired later)
 	property int displayedFrameNo: -1
+	// Effective frame number: use provided displayedFrameNo if >=0, else take from last data row (including 0)
+	property int effectiveFrameNo: (displayedFrameNo >= 0) ? displayedFrameNo : (
+		(frameYZController && frameYZController.frameYZList && frameYZController.frameYZList.length > 0)
+		? (typeof frameYZController.frameYZList[frameYZController.frameYZList.length - 1].frameNo !== 'undefined'
+			? frameYZController.frameYZList[frameYZController.frameYZList.length - 1].frameNo : -1)
+		: -1)
 	property alias graphArea: graphAreaRect
 	signal helpRequested()
 
@@ -44,7 +50,7 @@ Rectangle {
 				color: "#6c757d"
 			}
 			Text {
-				text: displayedFrameNo >= 0 ? displayedFrameNo : "-"
+				text: yzFrameRoot.effectiveFrameNo >= 0 ? yzFrameRoot.effectiveFrameNo : "-"
 				font.pixelSize: 12
 				color: "#2c3e50"
 			}
@@ -63,7 +69,7 @@ Rectangle {
 			Layout.fillHeight: true
 			clip: true
 			gridSpacing: 20
-			currentFrameNo: displayedFrameNo
+			currentFrameNo: effectiveFrameNo
 			frameController: frameYZController
 			greenLineColor: "#00ff00"
 			// Zoom & Pan state
