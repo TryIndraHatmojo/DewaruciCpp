@@ -65,7 +65,7 @@ private:
     struct LineRecord {
         QLineF line;             // in world/item coords prior to painter scaling transform
         bool horizontal;         // true: horizontal (Y line per spec), false: vertical (Z line per spec)
-        int index;               // L{index}, zero-based
+        int index;               // Global L{index}, zero-based across all rows/lines
         double valueMM;          // value in mm for the axis label
         QString axis;            // "Y" for horizontal, "Z" for vertical (per requested labeling)
     };
@@ -75,10 +75,10 @@ private:
     void drawShipOutline(QPainter *p, int centerX, int centerY, int spacing);
     
     // Drawing helper functions for Y and Z coordinates (based on reference JavaScript)
-    void drawZCoordinateLines(QPainter *p, int centerX, int centerY, int spacing, 
-                            double zCoor, double spacingInLoop, const QString &thisSym, int index);
+    void drawZCoordinateLines(QPainter *p, int centerX, int centerY, int spacing,
+                              double zCoor, double spacingInLoop, const QString &thisSym, int &globalIndex);
     void drawYCoordinateLines(QPainter *p, int centerX, int centerY, int spacing,
-                            double yCoor, double spacingInLoop, const QString &thisSym, int index);
+                              double yCoor, double spacingInLoop, const QString &thisSym, int &globalIndex);
 
     // Validation and calculation helpers
     bool isValidFieldData(const QJsonObject& fieldData) const;

@@ -58,6 +58,8 @@ public:
                                const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym);
     Q_INVOKABLE bool updateFrame(int id, const QString &name, int no, double spacing,
                                 const QVariant &y, const QVariant &z, int frameNo, const QString &fa, const QString &sym);
+    // Update only the name column; when reloadModel is false, does not call loadData()
+    Q_INVOKABLE bool updateFrameName(int id, const QString &name, bool reloadModel = true);
     Q_INVOKABLE bool updateFrameFa(int id, const QString &fa);
     Q_INVOKABLE bool updateFrameSym(int id, const QString &sym);
     Q_INVOKABLE bool deleteFrame(int id);

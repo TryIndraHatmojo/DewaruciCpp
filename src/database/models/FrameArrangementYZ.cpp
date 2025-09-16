@@ -279,6 +279,33 @@ bool FrameArrangementYZ::updateFrame(int id, const QString &name, int no, double
     return true;
 }
 
+bool FrameArrangementYZ::updateFrameName(int id, const QString &name, bool reloadModel)
+{
+    QSqlDatabase db = getDatabase();
+    if (!db.isValid()) {
+        m_lastError = "Ship database connection is not valid";
+        qCritical() << "FrameArrangementYZ::updateFrameName() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return false;
+    }
+
+    QSqlQuery query(db);
+    query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_yz SET name=?, updated_at=(strftime('%s','now')*1000) WHERE id=?");
+    query.addBindValue(name);
+    query.addBindValue(id);
+
+    if (!query.exec()) {
+        m_lastError = QString("Failed to update frame YZ name: %1").arg(query.lastError().text());
+        qCritical() << "FrameArrangementYZ::updateFrameName() -" << m_lastError;
+        emit errorOccurred(m_lastError);
+        return false;
+    }
+
+    qDebug() << "FrameArrangementYZ::updateFrameName() - Name updated for id" << id << "=>" << name;
+    if (reloadModel) loadData();
+    return true;
+}
+
 bool FrameArrangementYZ::updateFrameFa(int id, const QString &fa)
 {
     QSqlDatabase db = getDatabase();

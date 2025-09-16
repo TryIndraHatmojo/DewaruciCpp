@@ -127,6 +127,7 @@ ColumnLayout {
                         // Commit row update with current editor values
                         function commitUpdate() {
                             if (!row || !row.id) return
+                            // Name is auto-generated in backend; send current displayed value for completeness
                             var nameVal = nameInput.text
                             var noVal = parseInt(noInput.text)
                             if (isNaN(noVal)) noVal = 0
@@ -191,17 +192,19 @@ ColumnLayout {
                                     anchors.margins: 4
                                     text: (row && row.name) ? row.name : "L0"
                                     font.pixelSize: 10
+                                    readOnly: true
+                                    color: "#555555"
                                     selectByMouse: true
                                     onActiveFocusChanged: if (activeFocus) { yzList.currentIndex = index; yzList.focusedColumn = 0 }
                                     Keys.onPressed: {
-                                        if (event.key === Qt.Key_Tab) { commitUpdate(); moveHorizontal(event.modifiers & Qt.ShiftModifier ? -1 : 1); event.accepted = true }
+                                        // Skip editing; allow navigation only
+                                        if (event.key === Qt.Key_Tab) { moveHorizontal(event.modifiers & Qt.ShiftModifier ? -1 : 1); event.accepted = true }
                                         else if (event.key === Qt.Key_Left) { moveHorizontal(-1); event.accepted = true }
                                         else if (event.key === Qt.Key_Right) { moveHorizontal(1); event.accepted = true }
-                                        else if (event.key === Qt.Key_Up) { commitUpdate(); moveVertical(-1); event.accepted = true }
-                                        else if (event.key === Qt.Key_Down) { commitUpdate(); moveVertical(1); event.accepted = true }
-                                        else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { commitUpdate(); moveHorizontal(1); event.accepted = true }
+                                        else if (event.key === Qt.Key_Up) { moveVertical(-1); event.accepted = true }
+                                        else if (event.key === Qt.Key_Down) { moveVertical(1); event.accepted = true }
                                     }
-                                    onEditingFinished: commitUpdate()
+                                    // No editing
                                 }
                             }
                             
@@ -546,10 +549,28 @@ ColumnLayout {
                             return arr[arr.length - 1]
                         }
 
+                        function totalNoSum() {
+                            var arr = frameYZController.frameYZList || []
+                            var sum = 0
+                            for (var i = 0; i < arr.length; ++i) {
+                                var n = parseInt(arr[i].no)
+                                if (!isNaN(n)) sum += n
+                            }
+                            return sum
+                        }
+
+                        function computeNextName() {
+                            var arr = frameYZController.frameYZList || []
+                            if (!arr || arr.length === 0) return "L0"
+                            // Next name uses 1 + sum of all existing No
+                            var sum = totalNoSum()
+                            return "L" + (1 + sum)
+                        }
+
                         function autoUpdateFromLastRow() {
                             var last = lastData()
                             if (last) {
-                                shadowName = (last.name !== undefined) ? last.name : "L0"
+                                shadowName = computeNextName()
                                 shadowNo = (last.no !== undefined) ? (parseInt(last.no) || 0) + 1 : 0
                                 shadowSpacing = (last.spacing !== undefined) ? (parseFloat(last.spacing) || 1) : 1
                                 shadowY = (last.y !== undefined) ? (parseFloat(last.y) || 0) : 0
@@ -571,7 +592,7 @@ ColumnLayout {
 
                         function addShadowRow() {
                             // Use current editor texts (properties kept in sync via onTextChanged)
-                            var nameVal = shadowNameInput.text || "L0"
+                            var nameVal = computeNextName()
                             var noVal = parseInt(shadowNoInput.text); if (isNaN(noVal)) noVal = 0
                             var spacingVal = parseFloat(shadowSpacingInput.text); if (isNaN(spacingVal)) spacingVal = 0
                             
@@ -634,10 +655,12 @@ ColumnLayout {
                                     id: shadowNameInput
                                     anchors.fill: parent
                                     anchors.margins: 4
-                                    text: yzShadowRow.shadowName
+                                    text: yzShadowRow.computeNextName()
                                     font.pixelSize: 10
+                                    readOnly: true
+                                    color: "#555555"
                                     selectByMouse: true
-                                    onTextChanged: yzShadowRow.shadowName = text
+                                    // No manual edit for auto-generated name
                                     Keys.onPressed: {
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 1; shadowNoInput.forceActiveFocus(); shadowNoInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Right) { yzList.focusedColumn = 1; shadowNoInput.forceActiveFocus(); shadowNoInput.selectAll(); event.accepted = true }

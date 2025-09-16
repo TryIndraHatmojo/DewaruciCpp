@@ -134,6 +134,11 @@ void FrameArrangementYZController::getFrameYZAll() {
 	if (!m_model->loadData()) { return; }
 	QVariantList rows;
 	for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
+	// Compute and persist auto-generated names before exposing to UI
+	computeAndPersistNames(rows);
+	// Reload rows again after potential name updates
+	rows.clear();
+	for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
 	setFrameYZList(generateObjectJson(rows));
 }
 
@@ -149,6 +154,44 @@ void FrameArrangementYZController::getFrameYZByName(const QString &name) {
 	if (!m_model) { emit errorOccurred("Model not set"); return; }
 	QVariantList rows = m_model->getFramesByName(name);
 	setSelectedFrameYZName(generateObjectJson(rows));
+}
+
+void FrameArrangementYZController::recomputeNames() {
+	if (!m_model) { emit errorOccurred("Model not set"); return; }
+	// Use current list if available; otherwise fetch all
+	QVariantList rows;
+	for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
+	if (rows.isEmpty()) {
+		if (!m_model->loadData()) return;
+		for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
+	}
+	computeAndPersistNames(rows);
+	// Emit fresh list
+	rows.clear();
+	for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
+	setFrameYZList(generateObjectJson(rows));
+}
+
+void FrameArrangementYZController::computeAndPersistNames(const QVariantList &rows) {
+	if (!m_model) return;
+	// Rule: Name[0] = L0; Name[n] = "L" + sum(No[0..n])
+	long long cumulative = 0;
+	for (int i = 0; i < rows.size(); ++i) {
+		const QVariantMap m = rows[i].toMap();
+		const int id = m.value("id").toInt();
+		const int no = m.value("no").toInt();
+		const QString currentName = m.value("name").toString();
+		// Name[0] = L0; for n>=1, Name[n] = "L" + (sum(No[0..n-1]) + 1)
+		const long long expected = (i == 0) ? 0 : (cumulative);
+		const QString expectedName = QString("L%1").arg(expected);
+		if (currentName != expectedName) {
+			// Update DB name without forcing reload for each row; batch and finally reload once
+			m_model->updateFrameName(id, expectedName, /*reloadModel*/ false);
+		}
+		cumulative += no;
+	}
+	// One reload at the end to reflect all updates
+	m_model->loadData();
 }
 
 // ---------------- Frame YZ Drawing (mirrors Python functions) ----------------

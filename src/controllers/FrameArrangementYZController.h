@@ -50,6 +50,8 @@ public slots:
     Q_INVOKABLE void getFrameYZAll();
     Q_INVOKABLE void getFrameYZById(int id);
     Q_INVOKABLE void getFrameYZByName(const QString &name);
+    // Recompute auto-generated Name column (L + cumulative sum of No)
+    Q_INVOKABLE void recomputeNames();
     // Drawing table operations
     Q_INVOKABLE int insertFrameYZDrawing(int frameyzId, const QString &name, int no, double spacing,
                                          double y, double z, int frameNo, const QString &fa, const QString &sym);
@@ -74,6 +76,7 @@ private:
     QJsonArray m_frameYZDrawing;
 
     QJsonArray generateObjectJson(const QVariantList &data);
+    void computeAndPersistNames(const QVariantList &rows);
 };
 
 #endif // FRAMEARRANGEMENTYZCONTROLLER_H

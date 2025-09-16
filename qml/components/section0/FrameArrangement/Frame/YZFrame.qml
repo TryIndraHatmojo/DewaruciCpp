@@ -13,6 +13,10 @@ Rectangle {
 
 	// Caption for clicked line info
 	property string infoText: ""
+	// For cycling overlapping hits at the same click point
+	property real _lastClickX: -1
+	property real _lastClickY: -1
+	property int _candidateIndex: 0
 
 	// Public API (can be wired later)
 	property int displayedFrameNo: -1
@@ -159,11 +163,33 @@ Rectangle {
 				onReleased: function(mouse) {
 					if (!moved) {
 						// Treat as click: hit test
-						const res = graphAreaRect.hitTestAt(mouse.x, mouse.y, 6)
+						const tol = 6
+						const res = graphAreaRect.hitTestAt(mouse.x, mouse.y, tol)
 						if (res && res.success) {
-							yzFrameRoot.infoText = res.text
+							// If clicking close to previous point, cycle through candidates
+							const sameSpot = Math.abs(mouse.x - yzFrameRoot._lastClickX) < tol && Math.abs(mouse.y - yzFrameRoot._lastClickY) < tol
+							let textToShow = res.text
+							if (res.candidates && res.candidates.length > 0) {
+								if (sameSpot) {
+									yzFrameRoot._candidateIndex = (yzFrameRoot._candidateIndex + 1) % res.candidates.length
+								} else {
+									yzFrameRoot._candidateIndex = 0
+								}
+								const c = res.candidates[yzFrameRoot._candidateIndex]
+								if (c.horizontal) {
+									textToShow = "Line L" + c.index + " coordinate Y: ~ Z: " + c.valueMM
+								} else {
+									textToShow = "Line L" + c.index + " coordinate Y: " + c.valueMM + " Z: ~"
+								}
+							}
+							yzFrameRoot.infoText = textToShow
+							yzFrameRoot._lastClickX = mouse.x
+							yzFrameRoot._lastClickY = mouse.y
 						} else {
 							yzFrameRoot.infoText = ""
+							yzFrameRoot._candidateIndex = 0
+							yzFrameRoot._lastClickX = -1
+							yzFrameRoot._lastClickY = -1
 						}
 					}
 				}
