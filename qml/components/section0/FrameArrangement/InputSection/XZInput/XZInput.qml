@@ -189,7 +189,7 @@ ColumnLayout {
                                     verticalAlignment: TextInput.AlignVCenter
                                     validator: IntValidator { bottom: 0 }
                                     selectByMouse: true
-                                    color: "#2c3e50"
+                                    color: "#000000"
                                     
                                     // Rectangle {
                                     //     anchors.fill: parent
@@ -294,7 +294,7 @@ ColumnLayout {
                                     verticalAlignment: TextInput.AlignVCenter
                                     validator: IntValidator { bottom: 0 }
                                     selectByMouse: true
-                                    color: "#2c3e50"
+                                    color: "#000000"
                                     
                                     // Rectangle {
                                     //     anchors.fill: parent
@@ -473,7 +473,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: "#f0f0f0"
                                 border.color: "#ddd"
                                 border.width: 1
                                 
@@ -491,7 +491,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: "#f0f0f0"
                                 border.color: "#ddd"
                                 border.width: 1
                                 
@@ -509,7 +509,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: "#f0f0f0"
                                 border.color: "#ddd"
                                 border.width: 1
                                 
@@ -527,7 +527,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: "#f0f0f0"
                                 border.color: "#ddd"
                                 border.width: 1
                                 
@@ -834,13 +834,13 @@ ColumnLayout {
                             }
 
                             // Xp-Coor (readonly placeholder)
-                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f9fbff"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
+                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f0f0f0"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
                             // X/L
-                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f9fbff"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
+                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f0f0f0"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
                             // XLL-Coor
-                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f9fbff"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
+                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f0f0f0"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
                             // XLL/LLL
-                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f9fbff"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
+                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f0f0f0"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
 
                             // Action column (Add) styled like ProfileTable
                             Rectangle {

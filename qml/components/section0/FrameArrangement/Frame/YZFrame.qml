@@ -194,45 +194,44 @@ Rectangle {
 					}
 				}
 			}
-		}
 
-		// Info coordinate banner (shows when a line is clicked)
-		Rectangle {
-			id: infoBanner
-			Layout.fillWidth: true
-			visible: yzFrameRoot.infoText && yzFrameRoot.infoText.length > 0
-			color: "#2c3e50"            // light blue background
-			border.color: "#2c3e50"     // soft blue border
-			border.width: 1
-			radius: 6
-			height: implicitHeight
-			implicitHeight: infoRow.implicitHeight + 10
-			RowLayout {
-				id: infoRow
-				anchors.fill: parent
-				anchors.leftMargin: 8
-				spacing: 8
-				// Info badge
-				// Rectangle {
-				// 	width: 18; height: 18; radius: 9
-				// 	color: "#4aa3df"
-				// 	Text { anchors.centerIn: parent; text: "i"; color: "white"; font.pixelSize: 12; font.bold: true }
-				// }
-				Text {
-					text: yzFrameRoot.infoText
-					Layout.fillWidth: true
-					wrapMode: Text.WordWrap
-					font.pixelSize: 12
-					color: "#ddd"
-					font.bold: true
-				}
-				ToolButton {
-					text: "✕"
-					font.pixelSize: 12
-					onClicked: yzFrameRoot.infoText = ""
+			// Floating info coordinate banner overlayed at the bottom of the frame
+			Rectangle {
+				id: infoBannerOverlay
+				anchors.left: parent.left
+				anchors.right: parent.right
+				anchors.bottom: parent.bottom
+				anchors.margins: 3
+				radius: 3
+				z: 1000
+				visible: yzFrameRoot.infoText && yzFrameRoot.infoText.length > 0
+				color: "#2c3e50"          // semi-transparent dark background
+				border.color: "#2c3e50"   // semi-transparent border
+				border.width: 1
+				height: contentRow.implicitHeight + 10
+				RowLayout {
+					id: contentRow
+					anchors.fill: parent
+					anchors.margins: 8
+					spacing: 8
+					Text {
+						text: yzFrameRoot.infoText
+						Layout.fillWidth: true
+						wrapMode: Text.WordWrap
+						font.pixelSize: 12
+						color: "#ECEFF1"
+						font.bold: true
+					}
+					ToolButton {
+						text: "✕"
+						font.pixelSize: 12
+						onClicked: yzFrameRoot.infoText = ""
+					}
 				}
 			}
 		}
+
+		// (Removed previous banner here to avoid layout shifts; overlay used instead)
 
 		// Usage hints (static card)
 		Rectangle {
