@@ -571,7 +571,7 @@ ColumnLayout {
                             var last = lastData()
                             if (last) {
                                 shadowName = computeNextName()
-                                shadowNo = (last.no !== undefined) ? (parseInt(last.no) || 0) + 1 : 0
+                                shadowNo = (last.no !== undefined) ? (parseInt(last.no) || 0) : 0
                                 shadowSpacing = (last.spacing !== undefined) ? (parseFloat(last.spacing) || 1) : 1
                                 shadowY = (last.y !== undefined) ? (parseFloat(last.y) || 0) : 0
                                 shadowZ = (last.z !== undefined) ? (parseFloat(last.z) || 0) : 0
