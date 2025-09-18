@@ -174,23 +174,44 @@ void FrameArrangementYZController::recomputeNames() {
 
 void FrameArrangementYZController::computeAndPersistNames(const QVariantList &rows) {
 	if (!m_model) return;
-	// Rule: Name[0] = L0; Name[n] = "L" + sum(No[0..n])
-	long long cumulative = 0;
-	for (int i = 0; i < rows.size(); ++i) {
-		const QVariantMap m = rows[i].toMap();
+
+	// Strategy: per-prefix 0-based numbering after sorting by prefix.
+	// 1) Build a temp list of {id, prefix} and sort by prefix (A→Z), then by id for stability.
+	struct Item { int id; QString prefix; };
+	QVector<Item> items;
+	items.reserve(rows.size());
+	for (const QVariant &v : rows) {
+		const QVariantMap m = v.toMap();
 		const int id = m.value("id").toInt();
-		const int no = m.value("no").toInt();
-		const QString currentName = m.value("name").toString();
-		// Name[0] = L0; for n>=1, Name[n] = "L" + (sum(No[0..n-1]) + 1)
-		const long long expected = (i == 0) ? 0 : (cumulative);
-		const QString expectedName = QString("L%1").arg(expected);
-		if (currentName != expectedName) {
-			// Update DB name without forcing reload for each row; batch and finally reload once
-			m_model->updateFrameName(id, expectedName, /*reloadModel*/ false);
-		}
-		cumulative += no;
+		const QString name = m.value("name").toString();
+		QString prefix;
+		for (int k = 0; k < name.size(); ++k) { const QChar ch = name.at(k); if (ch.isLetter()) prefix.append(ch.toUpper()); else break; }
+		if (prefix.isEmpty()) prefix = QStringLiteral("L");
+		items.push_back({ id, prefix });
 	}
-	// One reload at the end to reflect all updates
+	std::sort(items.begin(), items.end(), [](const Item &a, const Item &b){
+		if (a.prefix == b.prefix) return a.id < b.id; // stable ordering within prefix
+		return a.prefix < b.prefix;
+	});
+
+	// 2) Assign names: for each prefix, suffix starts at 0 and accumulates by previous row's No in that prefix.
+	// Build a quick lookup from id to No to compute steps.
+	QHash<int,int> idToNo;
+	for (const QVariant &v : rows) {
+		const QVariantMap m = v.toMap();
+		idToNo.insert(m.value("id").toInt(), m.value("no").toInt());
+	}
+
+	QHash<QString, long long> counters; // suffix per prefix
+	for (const Item &it : items) {
+		long long suffix = counters.value(it.prefix, 0);
+		const QString expectedName = it.prefix + QString::number(suffix);
+		m_model->updateFrameName(it.id, expectedName, /*reloadModel*/ false);
+		long long step = static_cast<long long>(qMax(1, idToNo.value(it.id, 0)));
+		counters.insert(it.prefix, suffix + step);
+	}
+
+	// One reload at the end to reflect all updates (model will also sort and renumber consistently)
 	m_model->loadData();
 }
 

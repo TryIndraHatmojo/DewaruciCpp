@@ -69,7 +69,7 @@ Rectangle {
 			Layout.fillHeight: true
 			clip: true
 			gridSpacing: 20
-			currentFrameNo: effectiveFrameNo
+			currentFrameNo: -1
 			frameController: frameYZController
 			greenLineColor: "#00ff00"
 			// Zoom & Pan state
@@ -103,7 +103,7 @@ Rectangle {
 
 			// Refresh display when frame controller is set
 			onFrameControllerChanged: {
-				if (frameController && currentFrameNo >= 0) {
+				if (frameController) {
 					Qt.callLater(function() {
 						graphAreaRect.regenerateDrawingData()
 					})
@@ -182,10 +182,11 @@ Rectangle {
 									yzFrameRoot._candidateIndex = 0
 								}
 								const c = res.candidates[yzFrameRoot._candidateIndex]
+								const cName = c.name || ((c.prefix || "L") + c.index)
 								if (c.horizontal) {
-									textToShow = "Line L" + c.index + " coordinate Y: ~ Z: " + c.valueMM
+									textToShow = "Line " + cName + " coordinate Y: ~ Z: " + c.valueMM
 								} else {
-									textToShow = "Line L" + c.index + " coordinate Y: " + c.valueMM + " Z: ~"
+									textToShow = "Line " + cName + " coordinate Y: " + c.valueMM + " Z: ~"
 								}
 							}
 							yzFrameRoot.infoText = textToShow

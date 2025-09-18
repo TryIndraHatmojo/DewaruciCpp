@@ -4,6 +4,18 @@
 #include <QSqlError>
 #include <QVariant>
 #include <QDebug>
+#include <algorithm>
+
+// Helper: extract leading letter prefix from a name, uppercase; fallback to "L" if none
+static QString extractLetterPrefix(const QString &name) {
+    QString prefix;
+    for (const QChar &ch : name) {
+        if (ch.isLetter()) prefix.append(ch.toUpper());
+        else break;
+    }
+    if (prefix.isEmpty()) prefix = QStringLiteral("L");
+    return prefix;
+}
 
 FrameArrangementYZ::FrameArrangementYZ(QObject *parent)
     : QAbstractListModel(parent)
@@ -139,12 +151,34 @@ bool FrameArrangementYZ::loadData()
         frame.y = query.value(4);
         frame.z = query.value(5);
         frame.frameNo = query.value(6).toInt();
-    frame.fa = query.value(7).toString();
-    frame.sym = query.value(8).toString();
-    frame.createdAt = query.value(9).toLongLong();
-    frame.updatedAt = query.value(10).toLongLong();
+        frame.fa = query.value(7).toString();
+        frame.sym = query.value(8).toString();
+        frame.createdAt = query.value(9).toLongLong();
+        frame.updatedAt = query.value(10).toLongLong();
 
         m_frameYZData.append(frame);
+    }
+
+    // Sort by letter prefix of name (A→Z), ignore numeric suffix; stable by id within same prefix
+    std::stable_sort(m_frameYZData.begin(), m_frameYZData.end(), [](const FrameYZData &a, const FrameYZData &b){
+        const QString pa = extractLetterPrefix(a.name);
+        const QString pb = extractLetterPrefix(b.name);
+        if (pa == pb) return a.id < b.id;
+        return pa < pb;
+    });
+
+    // Group by prefix and renumber suffix within each prefix starting at 0,
+    // where suffix accumulates by the previous row's No within the same prefix.
+    {
+        QHash<QString, long long> counters; // suffix per prefix
+        for (FrameYZData &f : m_frameYZData) {
+            const QString p = extractLetterPrefix(f.name);
+            long long suffix = counters.value(p, 0);
+            f.name = p + QString::number(suffix);
+            // advance suffix by this row's No for next item in this prefix group
+            long long step = static_cast<long long>(qMax(1, f.no));
+            counters.insert(p, suffix + step);
+        }
     }
 
     endResetModel();
@@ -187,12 +221,34 @@ bool FrameArrangementYZ::loadDataByFrameNo(int frameNumber)
         frame.y = query.value(4);
         frame.z = query.value(5);
         frame.frameNo = query.value(6).toInt();
-    frame.fa = query.value(7).toString();
-    frame.sym = query.value(8).toString();
-    frame.createdAt = query.value(9).toLongLong();
-    frame.updatedAt = query.value(10).toLongLong();
+        frame.fa = query.value(7).toString();
+        frame.sym = query.value(8).toString();
+        frame.createdAt = query.value(9).toLongLong();
+        frame.updatedAt = query.value(10).toLongLong();
 
         m_frameYZData.append(frame);
+    }
+
+    // Sort by letter prefix of name (A→Z), ignore numeric suffix; stable by id within same prefix
+    std::stable_sort(m_frameYZData.begin(), m_frameYZData.end(), [](const FrameYZData &a, const FrameYZData &b){
+        const QString pa = extractLetterPrefix(a.name);
+        const QString pb = extractLetterPrefix(b.name);
+        if (pa == pb) return a.id < b.id;
+        return pa < pb;
+    });
+
+    // Group by prefix and renumber suffix within each prefix starting at 0,
+    // where suffix accumulates by the previous row's No within the same prefix.
+    {
+        QHash<QString, long long> counters; // suffix per prefix
+        for (FrameYZData &f : m_frameYZData) {
+            const QString p = extractLetterPrefix(f.name);
+            long long suffix = counters.value(p, 0);
+            f.name = p + QString::number(suffix);
+            long long step = static_cast<long long>(qMax(0, f.no));
+            step = qMax<long long>(1, step);
+            counters.insert(p, suffix + step);
+        }
     }
 
     endResetModel();

@@ -7,6 +7,41 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <cmath>
+#include <algorithm>
+
+// Helper: parse leading letters as prefix and trailing digits as numeric suffix start
+static inline void parsePrefixAndSuffix(const QString &name, QString &outPrefix, long long &outSuffix)
+{
+    outPrefix.clear();
+    outSuffix = 0;
+    int i = 0;
+    while (i < name.size() && name.at(i).isLetter()) {
+        outPrefix.append(name.at(i).toUpper());
+        ++i;
+    }
+    QString digits;
+    while (i < name.size() && name.at(i).isDigit()) {
+        digits.append(name.at(i));
+        ++i;
+    }
+    if (!digits.isEmpty()) {
+        bool ok = false;
+        long long v = digits.toLongLong(&ok);
+        if (ok) outSuffix = v;
+    }
+    if (outPrefix.isEmpty()) outPrefix = QStringLiteral("L");
+}
+
+// Helper: deterministic color per prefix (first letter-based hue)
+static inline QColor colorForPrefix(const QString &prefix)
+{
+    if (prefix.isEmpty()) return QColor("#000000");
+    const QChar c = prefix.at(0).toUpper();
+    int idx = c.unicode() - QChar('A').unicode();
+    if (idx < 0) idx = 0; if (idx > 25) idx = idx % 26;
+    int hue = (idx * 35) % 360; // spread hues
+    return QColor::fromHsv(hue, 200, 220);
+}
 
 FrameArrangementYZFrameController::FrameArrangementYZFrameController(QQuickItem *parent)
     : QQuickPaintedItem(parent)
@@ -57,14 +92,13 @@ void FrameArrangementYZFrameController::drawFrameLines(QPainter *p, int centerX,
 {
     // Load current frame data
     loadFrameData();
+    // Reset drawn lines cache so hit-testing reflects current render only
     m_drawnLines.clear();
-    
-    // Get all data without frameNo filter
+
     QList<QJsonObject> allFrameData;
+    // Draw ALL lines regardless of frame number (frameNo filter removed)
     for (auto val : m_frameYZDrawing) {
-        if (val.isObject()) {
-            allFrameData.append(val.toObject());
-        }
+        if (val.isObject()) allFrameData.append(val.toObject());
     }
     
     qDebug() << "=== DEBUG DRAW FRAME LINES (Reference Logic) ===";
@@ -83,46 +117,51 @@ void FrameArrangementYZFrameController::drawFrameLines(QPainter *p, int centerX,
     // Horizontal centerline (Y axis): from far left to far right
     p->drawLine(centerX - 99999 * spacing, centerY, centerX + 99999 * spacing, centerY);
 
-    // Set pen for frame lines (use configured green color)
-    QPen framePen(m_greenLineColor, 1);
-    framePen.setCosmetic(true);
-    p->setPen(framePen);
+    // Generate per-line tasks with sequential names from the row Name + No
+    struct GenItem { bool horizontal; QString sym; QString prefix; QString name; long long suffix; double yCoor; double zCoor; double spacingInLoop; };
+    QVector<GenItem> items;
+    items.reserve(allFrameData.size() * 4);
 
-    // Process each entry using reference JavaScript logic with global line index
-    int globalLineIndex = 0;
     for (const auto &entry : allFrameData) {
-        qDebug() << "Processing entry:" << entry;
-        
-        if (!isValidFieldData(entry)) {
-            qDebug() << "❌ Invalid field data";
-            continue;
-        }
+        if (!isValidFieldData(entry)) continue;
+        const double yCoor = entry.value("y").toDouble();
+        const double zCoor = entry.value("z").toDouble();
+        const QString thisSym = entry.value("sym").toString();
+        const QString rowName = entry.value("name").toString();
+        QString prefix; long long startSuffix = 0;
+        parsePrefixAndSuffix(rowName, prefix, startSuffix);
+        const double entrySpacing = entry.value("spacing").toDouble();
+        const int lineCount = std::max(0, entry.value("no").toInt());
 
-        // Get values like reference JavaScript
-        double yCoor = entry.value("y").toDouble();
-        double zCoor = entry.value("z").toDouble();
-        QString thisSym = entry.value("sym").toString();
-        QString name = entry.value("name").toString();
-        double entrySpacing = entry.value("spacing").toDouble();
-        int lineCount = entry.value("no").toInt();
-
-        qDebug() << "Y:" << yCoor << "Z:" << zCoor << "Sym:" << thisSym << "Count:" << lineCount << "Spacing:" << entrySpacing;
-
-    // Draw even when coordinate equals 0 (center line). Do not skip zero.
-
-        // Draw multiple lines based on count (like reference)
+        // Generate i = 0..No-1 names: prefix+(startSuffix+i)
         for (int i = 0; i < lineCount; ++i) {
-            // Progressive spacing like reference, with zero rule applied per axis below
-            double spacingInLoop = i * entrySpacing;
-
-            // Check if Y is empty/not set and Z has value (including 0) - draws HORIZONTAL lines
+            const long long suffix = startSuffix + i;
+            const QString lineName = prefix + QString::number(suffix);
+            const double spacingInLoop = i * entrySpacing;
             if (!hasYValue(entry) && hasZValue(entry)) {
-                drawZCoordinateLines(p, centerX, centerY, spacing, zCoor, spacingInLoop, thisSym, globalLineIndex);
+                items.push_back({ true, thisSym, prefix, lineName, suffix, yCoor, zCoor, spacingInLoop });
+            } else if (!hasZValue(entry) && hasYValue(entry)) {
+                items.push_back({ false, thisSym, prefix, lineName, suffix, yCoor, zCoor, spacingInLoop });
             }
-            // Check if Z is empty/not set and Y has value (including 0) - draws VERTICAL lines
-            else if (!hasZValue(entry) && hasYValue(entry)) {
-                drawYCoordinateLines(p, centerX, centerY, spacing, yCoor, spacingInLoop, thisSym, globalLineIndex);
-            }
+        }
+    }
+
+    // Sort generated lines by prefix (A->Z) then numeric suffix ascending
+    std::sort(items.begin(), items.end(), [](const GenItem &a, const GenItem &b){
+        if (a.prefix == b.prefix) return a.suffix < b.suffix;
+        return a.prefix < b.prefix;
+    });
+
+    // Draw in sorted order; set color per prefix
+    int globalLineIndex = 0;
+    for (const auto &gi : items) {
+        QPen framePen(colorForPrefix(gi.prefix), 1);
+        framePen.setCosmetic(true);
+        p->setPen(framePen);
+        if (gi.horizontal) {
+            drawZCoordinateLines(p, centerX, centerY, spacing, gi.zCoor, gi.spacingInLoop, gi.sym, gi.prefix, gi.name, globalLineIndex);
+        } else {
+            drawYCoordinateLines(p, centerX, centerY, spacing, gi.yCoor, gi.spacingInLoop, gi.sym, gi.prefix, gi.name, globalLineIndex);
         }
     }
     
@@ -171,7 +210,7 @@ void FrameArrangementYZFrameController::drawShipOutline(QPainter *p, int centerX
 
 // Draw Z coordinate lines (HORIZONTAL lines) - based on reference JavaScript
 void FrameArrangementYZFrameController::drawZCoordinateLines(QPainter *p, int centerX, int centerY, int spacing,
-                                                           double zCoor, double spacingInLoop, const QString &thisSym, int &globalIndex)
+                                                           double zCoor, double spacingInLoop, const QString &thisSym, const QString &prefix, const QString &name, int &globalIndex)
 {
     qDebug() << "Drawing Z coordinate (HORIZONTAL) lines - zCoor:" << zCoor << "spacingInLoop:" << spacingInLoop << "sym:" << thisSym;
 
@@ -191,7 +230,7 @@ void FrameArrangementYZFrameController::drawZCoordinateLines(QPainter *p, int ce
         p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
         qDebug() << "Drew P side horizontal line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
         // Record for hit testing
-        m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), true, globalIndex, (zCoor + spacingInLoop), QStringLiteral("Y") });
+    m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), true, globalIndex, (zCoor + spacingInLoop), QStringLiteral("Y"), prefix, name });
         ++globalIndex;
     }
     else if (thisSym == "S") {
@@ -206,7 +245,7 @@ void FrameArrangementYZFrameController::drawZCoordinateLines(QPainter *p, int ce
         // Draw line
         p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
         qDebug() << "Drew S side horizontal line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
-        m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), true, globalIndex, (zCoor + spacingInLoop), QStringLiteral("Y") });
+    m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), true, globalIndex, (zCoor + spacingInLoop), QStringLiteral("Y"), prefix, name });
         ++globalIndex;
     }
     else if (thisSym == "P+S" || thisSym == "S+P") {
@@ -220,7 +259,7 @@ void FrameArrangementYZFrameController::drawZCoordinateLines(QPainter *p, int ce
         secondPoint_z = yPx;
         p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
         qDebug() << "Drew P+S left horizontal half from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
-        m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), true, globalIndex, (zCoor + spacingInLoop), QStringLiteral("Y") });
+    m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), true, globalIndex, (zCoor + spacingInLoop), QStringLiteral("Y"), prefix, name });
 
         // Right half: from center to far right
         firstPoint_y = centerX;
@@ -229,7 +268,7 @@ void FrameArrangementYZFrameController::drawZCoordinateLines(QPainter *p, int ce
         secondPoint_z = yPx;
         p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
         qDebug() << "Drew P+S right horizontal half from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
-        m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), true, globalIndex, (zCoor + spacingInLoop), QStringLiteral("Y") });
+    m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), true, globalIndex, (zCoor + spacingInLoop), QStringLiteral("Y"), prefix, name });
 
         // Increment ONCE for the logical line
         ++globalIndex;
@@ -238,7 +277,7 @@ void FrameArrangementYZFrameController::drawZCoordinateLines(QPainter *p, int ce
 
 // Draw Y coordinate lines (VERTICAL lines) - based on reference JavaScript  
 void FrameArrangementYZFrameController::drawYCoordinateLines(QPainter *p, int centerX, int centerY, int spacing,
-                                                           double yCoor, double spacingInLoop, const QString &thisSym, int &globalIndex)
+                                                           double yCoor, double spacingInLoop, const QString &thisSym, const QString &prefix, const QString &name, int &globalIndex)
 {
     qDebug() << "Drawing Y coordinate (VERTICAL) lines - yCoor:" << yCoor << "spacingInLoop:" << spacingInLoop << "sym:" << thisSym;
 
@@ -260,7 +299,7 @@ void FrameArrangementYZFrameController::drawYCoordinateLines(QPainter *p, int ce
         // Draw line
         p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
         qDebug() << "Drew P side vertical line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
-        m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), false, globalIndex, (yCoor + spacingInLoop), QStringLiteral("Z") });
+    m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), false, globalIndex, (yCoor + spacingInLoop), QStringLiteral("Z"), prefix, name });
         ++globalIndex;
     }
     else if (thisSym == "S") {
@@ -278,7 +317,7 @@ void FrameArrangementYZFrameController::drawYCoordinateLines(QPainter *p, int ce
         // Draw line
         p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
         qDebug() << "Drew S side vertical line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
-        m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), false, globalIndex, (yCoor + spacingInLoop), QStringLiteral("Z") });
+    m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), false, globalIndex, (yCoor + spacingInLoop), QStringLiteral("Z"), prefix, name });
         ++globalIndex;
     }
     else if (thisSym == "P+S" || thisSym == "S+P") {
@@ -295,7 +334,7 @@ void FrameArrangementYZFrameController::drawYCoordinateLines(QPainter *p, int ce
         secondPoint_z = centerY - 99999 * spacing;
         p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
         qDebug() << "Drew P+S right vertical line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
-        m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), false, sharedIndex, (yCoorPos), QStringLiteral("Z") });
+    m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), false, sharedIndex, (yCoorPos), QStringLiteral("Z"), prefix, name });
 
         // Draw left line (P side)
         firstPoint_y = centerX + static_cast<int>(yCoorNeg / 1000.0 * spacing);
@@ -304,7 +343,7 @@ void FrameArrangementYZFrameController::drawYCoordinateLines(QPainter *p, int ce
         secondPoint_z = centerY - 99999 * spacing;
         p->drawLine(firstPoint_y, firstPoint_z, secondPoint_y, secondPoint_z);
         qDebug() << "Drew P+S left vertical line from (" << firstPoint_y << "," << firstPoint_z << ") to (" << secondPoint_y << "," << secondPoint_z << ")";
-        m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), false, sharedIndex, (yCoorNeg), QStringLiteral("Z") });
+    m_drawnLines.push_back({ QLineF(QPointF(firstPoint_y, firstPoint_z), QPointF(secondPoint_y, secondPoint_z)), false, sharedIndex, (yCoorNeg), QStringLiteral("Z"), prefix, name });
 
         // Increment ONCE for the logical line
         ++globalIndex;
@@ -573,6 +612,8 @@ QVariantMap FrameArrangementYZFrameController::hitTestAt(qreal x, qreal y, qreal
             obj.insert("axis", rec.axis);
             obj.insert("valueMM", rec.valueMM);
             obj.insert("horizontal", rec.horizontal);
+            obj.insert("prefix", rec.prefix);
+            obj.insert("name", rec.name);
             obj.insert("distance", h.d);
             candidates.push_back(obj);
         }
@@ -583,9 +624,9 @@ QVariantMap FrameArrangementYZFrameController::hitTestAt(qreal x, qreal y, qreal
         res["axis"] = rec.axis;
         res["valueMM"] = rec.valueMM;
         if (rec.horizontal) {
-            res["text"] = QString("Line L%1 coordinate Y: ~ Z: %2").arg(rec.index).arg(rec.valueMM);
+            res["text"] = QString("Line %1 coordinate Y: ~ Z: %2").arg(rec.name).arg(rec.valueMM);
         } else {
-            res["text"] = QString("Line L%1 coordinate Y: %2 Z: ~").arg(rec.index).arg(rec.valueMM);
+            res["text"] = QString("Line %1 coordinate Y: %2 Z: ~").arg(rec.name).arg(rec.valueMM);
         }
         res["candidates"] = candidates;
     }

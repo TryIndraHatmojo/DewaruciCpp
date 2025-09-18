@@ -68,6 +68,8 @@ private:
         int index;               // Global L{index}, zero-based across all rows/lines
         double valueMM;          // value in mm for the axis label
         QString axis;            // "Y" for horizontal, "Z" for vertical (per requested labeling)
+        QString prefix;          // User-provided prefix from Name column for labeling
+        QString name;            // Full Name from model (e.g., F7) for display
     };
 
     // Drawing functions
@@ -76,9 +78,9 @@ private:
     
     // Drawing helper functions for Y and Z coordinates (based on reference JavaScript)
     void drawZCoordinateLines(QPainter *p, int centerX, int centerY, int spacing,
-                              double zCoor, double spacingInLoop, const QString &thisSym, int &globalIndex);
+                              double zCoor, double spacingInLoop, const QString &thisSym, const QString &prefix, const QString &name, int &globalIndex);
     void drawYCoordinateLines(QPainter *p, int centerX, int centerY, int spacing,
-                              double yCoor, double spacingInLoop, const QString &thisSym, int &globalIndex);
+                              double yCoor, double spacingInLoop, const QString &thisSym, const QString &prefix, const QString &name, int &globalIndex);
 
     // Validation and calculation helpers
     bool isValidFieldData(const QJsonObject& fieldData) const;

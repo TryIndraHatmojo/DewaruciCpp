@@ -127,8 +127,11 @@ ColumnLayout {
                         // Commit row update with current editor values
                         function commitUpdate() {
                             if (!row || !row.id) return
-                            // Name is auto-generated in backend; send current displayed value for completeness
-                            var nameVal = nameInput.text
+                            // Name is auto-generated in backend; send only the editable PREFIX (letters)
+                            var t = nameInput.text || ""
+                            var m = /^([A-Za-z]*)/.exec(t)
+                            var nameVal = (m && m[1]) ? m[1].toUpperCase() : ""
+                            if (nameVal.length === 0) nameVal = "L"
                             var noVal = parseInt(noInput.text)
                             if (isNaN(noVal)) noVal = 0
                             var spacingVal = parseFloat(spacingInput.text)
@@ -178,7 +181,7 @@ ColumnLayout {
                             anchors.fill: parent
                             spacing: 1
                             
-                            // Name
+                            // Name (editable prefix)
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
@@ -192,19 +195,31 @@ ColumnLayout {
                                     anchors.margins: 4
                                     text: (row && row.name) ? row.name : "L0"
                                     font.pixelSize: 10
-                                    readOnly: true
-                                    color: "#555555"
+                                    readOnly: false
+                                    enabled: true
+                                    color: "#000000"
                                     selectByMouse: true
+                                    // Allow editing prefix freely; backend will recompute suffix on refresh
+                                    onTextChanged: {
+                                        // Only sanitize while user is actively editing; keep model-provided suffix visible otherwise
+                                        if (!nameInput.activeFocus) return
+                                        // Keep only leading letters as editable prefix; uppercase; strip digits while typing
+                                        var t = nameInput.text || ""
+                                        var m = /^([A-Za-z]*)/.exec(t)
+                                        var prefix = (m && m[1]) ? m[1].toUpperCase() : ""
+                                        var rebuilt = prefix
+                                        if (rebuilt !== t) nameInput.text = rebuilt
+                                    }
                                     onActiveFocusChanged: if (activeFocus) { yzList.currentIndex = index; yzList.focusedColumn = 0 }
                                     Keys.onPressed: {
-                                        // Skip editing; allow navigation only
-                                        if (event.key === Qt.Key_Tab) { moveHorizontal(event.modifiers & Qt.ShiftModifier ? -1 : 1); event.accepted = true }
-                                        else if (event.key === Qt.Key_Left) { moveHorizontal(-1); event.accepted = true }
-                                        else if (event.key === Qt.Key_Right) { moveHorizontal(1); event.accepted = true }
-                                        else if (event.key === Qt.Key_Up) { moveVertical(-1); event.accepted = true }
-                                        else if (event.key === Qt.Key_Down) { moveVertical(1); event.accepted = true }
+                                        if (event.key === Qt.Key_Tab) { commitUpdate(); moveHorizontal(event.modifiers & Qt.ShiftModifier ? -1 : 1); event.accepted = true }
+                                        else if (event.key === Qt.Key_Left) { /* keep */ }
+                                        else if (event.key === Qt.Key_Right) { /* keep */ }
+                                        else if (event.key === Qt.Key_Up) { commitUpdate(); moveVertical(-1); event.accepted = true }
+                                        else if (event.key === Qt.Key_Down) { commitUpdate(); moveVertical(1); event.accepted = true }
+                                        else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { commitUpdate(); moveHorizontal(1); event.accepted = true }
                                     }
-                                    // No editing
+                                    onEditingFinished: commitUpdate()
                                 }
                             }
                             
@@ -526,7 +541,8 @@ ColumnLayout {
                         border.width: 0.5
 
                         // Shadow state defaults (mirror last row when possible)
-                        property string shadowName: "L0"
+                        // shadowName stores only the PREFIX (letters), suffix is auto-generated by backend based on No
+                        property string shadowName: "L"
                         property int shadowNo: 0
                         property double shadowSpacing: 1
                         property double shadowY: 0
@@ -549,28 +565,31 @@ ColumnLayout {
                             return arr[arr.length - 1]
                         }
 
-                        function totalNoSum() {
-                            var arr = frameYZController.frameYZList || []
-                            var sum = 0
-                            for (var i = 0; i < arr.length; ++i) {
-                                var n = parseInt(arr[i].no)
-                                if (!isNaN(n)) sum += n
-                            }
-                            return sum
+                        // Helper: extract uppercase letter prefix from a name string
+                        function extractPrefix(str) {
+                            var m = /^([A-Za-z]*)/.exec(str || "")
+                            return (m && m[1]) ? m[1].toUpperCase() : ""
                         }
 
-                        function computeNextName() {
+                        // Determine default prefix for the shadow row: user's typed prefix if any, else last-row prefix, else "L"
+                        function computeDefaultPrefix() {
+                            var typed = shadowNameInput && shadowNameInput.text ? extractPrefix(String(shadowNameInput.text)) : ""
+                            if (typed && typed.length > 0) return typed
                             var arr = frameYZController.frameYZList || []
-                            if (!arr || arr.length === 0) return "L0"
-                            // Next name uses 1 + sum of all existing No
-                            var sum = totalNoSum()
-                            return "L" + (1 + sum)
+                            if (arr && arr.length > 0) {
+                                var last = arr[arr.length - 1]
+                                var lname = (last && last.name) ? String(last.name) : "L"
+                                var lp = extractPrefix(lname)
+                                if (lp && lp.length > 0) return lp
+                            }
+                            return "L"
                         }
 
                         function autoUpdateFromLastRow() {
                             var last = lastData()
                             if (last) {
-                                shadowName = computeNextName()
+                                // Keep only PREFIX in the input; suffix is generated automatically in backend
+                                shadowName = computeDefaultPrefix()
                                 shadowNo = (last.no !== undefined) ? (parseInt(last.no) || 0) : 0
                                 shadowSpacing = (last.spacing !== undefined) ? (parseFloat(last.spacing) || 1) : 1
                                 shadowY = (last.y !== undefined) ? (parseFloat(last.y) || 0) : 0
@@ -579,7 +598,7 @@ ColumnLayout {
                                 shadowFa = (last.fa !== undefined) ? ("" + last.fa) : "0"
                                 shadowSym = (last.sym !== undefined) ? ("" + last.sym) : "0"
                             } else {
-                                shadowName = "L0"
+                                shadowName = "L"
                                 shadowNo = 0
                                 shadowSpacing = 1
                                 shadowY = 0
@@ -592,7 +611,11 @@ ColumnLayout {
 
                         function addShadowRow() {
                             // Use current editor texts (properties kept in sync via onTextChanged)
-                            var nameVal = computeNextName()
+                            // Only send PREFIX; backend will auto-generate suffix by No per prefix
+                            var t = shadowNameInput.text || ""
+                            var m = /^([A-Za-z]*)/.exec(t)
+                            var nameVal = (m && m[1]) ? m[1].toUpperCase() : ""
+                            if (!nameVal || nameVal.length === 0) nameVal = computeDefaultPrefix()
                             var noVal = parseInt(shadowNoInput.text); if (isNaN(noVal)) noVal = 0
                             var spacingVal = parseFloat(shadowSpacingInput.text); if (isNaN(spacingVal)) spacingVal = 0
                             
@@ -644,7 +667,7 @@ ColumnLayout {
                             anchors.margins: 2
                             spacing: 1
 
-                            // Name (shadow)
+                            // Name (shadow; user can edit prefix)
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
@@ -655,12 +678,21 @@ ColumnLayout {
                                     id: shadowNameInput
                                     anchors.fill: parent
                                     anchors.margins: 4
-                                    text: yzShadowRow.computeNextName()
+                                    // Show and edit only the PREFIX; suffix will be auto-generated
+                                    text: yzShadowRow.shadowName && yzShadowRow.shadowName.length > 0 ? yzShadowRow.shadowName : yzShadowRow.computeDefaultPrefix()
                                     font.pixelSize: 10
-                                    readOnly: true
-                                    color: "#555555"
+                                    readOnly: false
+                                    enabled: true
+                                    color: "#000000"
                                     selectByMouse: true
-                                    // No manual edit for auto-generated name
+                                    // Sanitize to PREFIX only (letters), uppercase
+                                    onTextChanged: {
+                                        var t = shadowNameInput.text || ""
+                                        var m = /^([A-Za-z]*)/.exec(t)
+                                        var prefix = (m && m[1]) ? m[1].toUpperCase() : ""
+                                        if (prefix !== t) shadowNameInput.text = prefix
+                                        yzShadowRow.shadowName = prefix && prefix.length > 0 ? prefix : yzShadowRow.computeDefaultPrefix()
+                                    }
                                     Keys.onPressed: {
                                         if (event.key === Qt.Key_Tab) { yzList.focusedColumn = 1; shadowNoInput.forceActiveFocus(); shadowNoInput.selectAll(); event.accepted = true }
                                         else if (event.key === Qt.Key_Right) { yzList.focusedColumn = 1; shadowNoInput.forceActiveFocus(); shadowNoInput.selectAll(); event.accepted = true }
