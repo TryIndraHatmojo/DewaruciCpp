@@ -761,9 +761,9 @@ ColumnLayout {
 
                                     // Write-through to DB and redraw
                                     commitCallback: function(txt) {
+                                        // Commit entire row using the same path as other columns
                                         if (row && row.id) {
-                                            frameYZController.updateFrameYZFa(row.id, txt)
-                                            Qt.callLater(function(){ dataChanged() })
+                                            commitUpdate()
                                         }
                                     }
                                     redrawCallback: function() {
@@ -805,9 +805,9 @@ ColumnLayout {
                                     onActiveFocusChanged: if (activeFocus) { yzList.currentIndex = index; yzList.focusedColumn = 7 }
 
                                     commitCallback: function(txt) {
+                                        // Commit entire row using the same path as other columns
                                         if (row && row.id) {
-                                            frameYZController.updateFrameYZSym(row.id, txt)
-                                            Qt.callLater(function(){ dataChanged() })
+                                            commitUpdate()
                                         }
                                     }
                                     redrawCallback: function() {
