@@ -6,6 +6,9 @@
 #include <QDebug>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QRandomGenerator>
+#include <QVector>
+#include <QHash>
 #include <cmath>
 #include <algorithm>
 
@@ -32,15 +35,88 @@ static inline void parsePrefixAndSuffix(const QString &name, QString &outPrefix,
     if (outPrefix.isEmpty()) outPrefix = QStringLiteral("L");
 }
 
-// Helper: deterministic color per prefix (first letter-based hue)
+// Helper: assign high-contrast, well-distributed colors per prefix.
+// Uses golden-angle hue stepping with minimum hue separation and RGB distance checks.
 static inline QColor colorForPrefix(const QString &prefix)
 {
-    if (prefix.isEmpty()) return QColor("#000000");
-    const QChar c = prefix.at(0).toUpper();
-    int idx = c.unicode() - QChar('A').unicode();
-    if (idx < 0) idx = 0; if (idx > 25) idx = idx % 26;
-    int hue = (idx * 35) % 360; // spread hues
-    return QColor::fromHsv(hue, 200, 220);
+    const QString key = prefix.isEmpty() ? QStringLiteral("L") : prefix.toUpper();
+
+    struct PaletteState {
+        bool initialized = false;
+        double startHue = 0.0;                // random seed hue per session
+        QVector<QColor> used;                 // colors assigned so far
+        QHash<QString, QColor> map;           // prefix -> color
+    };
+    static PaletteState ps;
+
+    // Return existing mapping
+    if (ps.map.contains(key)) return ps.map.value(key);
+
+    // Initialize with random start hue to vary palette per run
+    if (!ps.initialized) {
+        ps.initialized = true;
+        ps.startHue = QRandomGenerator::global()->bounded(360.0);
+    }
+
+    // Parameters for distribution and contrast
+    const double golden = 137.50776405003785; // degrees, golden-angle
+    const double minHueSeparation = 26.0;     // degrees, avoid near-identical hues
+    const double sat = 0.78;                  // strong saturation for contrast
+    const double light = 0.55;                // mid lightness (avoid pastel and too dark)
+    const double minRgbDistance = 80.0;       // minimum Euclidean distance in RGB (0..441 max)
+
+    auto hueDistanceDeg = [](double a, double b) {
+        double d = std::fabs(a - b);
+        return std::min(d, 360.0 - d);
+    };
+
+    auto farHue = [&](double candHueDeg) {
+        for (const QColor &c : ps.used) {
+            const double ch = (c.hslHueF() < 0) ? 0.0 : c.hslHueF() * 360.0;
+            if (hueDistanceDeg(candHueDeg, ch) < minHueSeparation)
+                return false;
+        }
+        return true;
+    };
+
+    auto rgbDistance = [](const QColor &a, const QColor &b) {
+        const int dr = a.red()   - b.red();
+        const int dg = a.green() - b.green();
+        const int db = a.blue()  - b.blue();
+        return std::sqrt(double(dr*dr + dg*dg + db*db));
+    };
+
+    // Base candidate using golden-angle sequence
+    int n = ps.map.size();
+    double hue = std::fmod(ps.startHue + n * golden, 360.0);
+
+    // If too close by hue, advance further along the sequence (bounded attempts)
+    int attempts = 0;
+    const int maxAttempts = 720;
+    while (!farHue(hue) && attempts++ < maxAttempts) {
+        hue = std::fmod(hue + golden, 360.0);
+    }
+
+    QColor col = QColor::fromHslF(hue / 360.0, sat, light);
+
+    // Ensure RGB distance is also sufficiently large; tweak lightness slightly if needed
+    attempts = 0;
+    while (attempts++ < 24) {
+        bool ok = true;
+        for (const QColor &c : ps.used) {
+            if (rgbDistance(col, c) < minRgbDistance) { ok = false; break; }
+        }
+        if (ok) break;
+        // Alternate lightness around the base value to force separation without changing hue
+        const double step = 0.06 * ((attempts + 1) / 2);
+        const double dir = (attempts % 2) ? -1.0 : 1.0;
+        const double nl = std::clamp(light + dir * step, 0.35, 0.72);
+        col = QColor::fromHslF(hue / 360.0, sat, nl);
+    }
+
+    ps.map.insert(key, col);
+    ps.used.push_back(col);
+    return col;
 }
 
 FrameArrangementYZFrameController::FrameArrangementYZFrameController(QQuickItem *parent)

@@ -25,6 +25,7 @@ public:
         FrameNoRole,
     FaRole,
     SymRole,
+    IsManualRole,
     CreatedAtRole,
     UpdatedAtRole
     };
@@ -39,6 +40,7 @@ public:
         int frameNo;
     QString fa;   // TEXT in DB
     QString sym;  // TEXT in DB
+    bool isManual{false};
     qint64 createdAt{0};
     qint64 updatedAt{0};
     };
@@ -62,6 +64,7 @@ public:
     Q_INVOKABLE bool updateFrameName(int id, const QString &name, bool reloadModel = true);
     Q_INVOKABLE bool updateFrameFa(int id, const QString &fa);
     Q_INVOKABLE bool updateFrameSym(int id, const QString &sym);
+    Q_INVOKABLE bool updateFrameIsManual(int id, bool isManual);
     Q_INVOKABLE bool deleteFrame(int id);
     Q_INVOKABLE bool deleteFramesByFrameNumber(int frameNumber);
     Q_INVOKABLE QVariantMap getFrameById(int id);
@@ -74,6 +77,12 @@ public:
                                          double y, double z, int frameNo, const QString &fa, const QString &sym);
     Q_INVOKABLE bool resetFrameYZDrawingTable();
     Q_INVOKABLE QVariantList getAllFrameYZDrawing();
+
+    // Conflict and assignment APIs
+    Q_INVOKABLE QVariantList checkSuffixConflict(const QString &prefix, int startSuffix, int count) const;
+    Q_INVOKABLE int getLastSuffixForPrefix(const QString &prefix) const;
+    Q_INVOKABLE bool assignManualNames(int id, const QString &prefix, int startSuffix, int count);
+    Q_INVOKABLE bool assignAutoNamesFrom(int id, const QString &prefix, int continueFromSuffix, int count);
 
     // Optional in-memory storage for drawing rows matching required C++ types
     struct FrameYZDrawingData {

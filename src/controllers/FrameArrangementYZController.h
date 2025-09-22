@@ -52,6 +52,12 @@ public slots:
     Q_INVOKABLE void getFrameYZByName(const QString &name);
     // Recompute auto-generated Name column (L + cumulative sum of No)
     Q_INVOKABLE void recomputeNames();
+    // Conflict helpers exposed to QML
+    Q_INVOKABLE QJsonArray checkSuffixConflict(const QString &prefix, int startSuffix, int count);
+    Q_INVOKABLE int getLastSuffixForPrefix(const QString &prefix);
+    Q_INVOKABLE bool assignManualNames(int id, const QString &prefix, int startSuffix, int count);
+    Q_INVOKABLE bool assignAutoNamesFrom(int id, const QString &prefix, int continueFromSuffix, int count);
+    Q_INVOKABLE bool updateFrameIsManual(int id, bool isManual);
     // Drawing table operations
     Q_INVOKABLE int insertFrameYZDrawing(int frameyzId, const QString &name, int no, double spacing,
                                          double y, double z, int frameNo, const QString &fa, const QString &sym);

@@ -33,7 +33,11 @@ qt_add_qml_module(appDewaruciCpp
         ./qml/pages/FrameArrangement.qml
         ./qml/components/section0/FrameArrangement/InputSection/XZInput/XZInput.qml
         ./qml/components/section0/FrameArrangement/InputSection/YZInput/YZInput.qml
-    ./qml/components/section0/FrameArrangement/Frame/YZFrame.qml
+        ./qml/components/section0/FrameArrangement/InputSection/YZInput/CustomComboBox.qml
+        ./qml/components/section0/FrameArrangement/InputSection/YZInput/PopUpSuffix.qml
+        ./qml/components/section0/FrameArrangement/InputSection/YZInput/PopUpAddChoice.qml
+        ./qml/components/section0/FrameArrangement/InputSection/YZInput/PopUpManualName.qml
+        ./qml/components/section0/FrameArrangement/Frame/YZFrame.qml
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.

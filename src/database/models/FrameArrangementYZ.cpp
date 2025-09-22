@@ -54,6 +54,8 @@ QVariant FrameArrangementYZ::data(const QModelIndex &index, int role) const
         return frame.fa;
     case SymRole:
         return frame.sym;
+    case IsManualRole:
+        return frame.isManual;
     case CreatedAtRole:
         return frame.createdAt;
     case UpdatedAtRole:
@@ -77,6 +79,7 @@ QHash<int, QByteArray> FrameArrangementYZ::roleNames() const
     roles[SymRole] = "sym";
     roles[CreatedAtRole] = "createdAt";
     roles[UpdatedAtRole] = "updatedAt";
+    roles[IsManualRole] = "isManual";
     return roles;
 }
 
@@ -102,6 +105,7 @@ bool FrameArrangementYZ::createTable()
             frame_no INTEGER,
             fa TEXT,
             sym TEXT,
+            is_manual INTEGER DEFAULT 0,
             created_at INTEGER DEFAULT (strftime('%s','now') * 1000),
             updated_at INTEGER DEFAULT (strftime('%s','now') * 1000)
         )
@@ -113,6 +117,9 @@ bool FrameArrangementYZ::createTable()
         emit errorOccurred(m_lastError);
         return false;
     }
+
+    // Try to add missing column for backward compatibility (ignore error if exists)
+    query.exec("ALTER TABLE structure_seagoing_ship_section0_frame_arrangement_yz ADD COLUMN is_manual INTEGER DEFAULT 0");
 
     qDebug() << "FrameArrangementYZ::createTable() - Table created successfully";
     return true;
@@ -129,7 +136,7 @@ bool FrameArrangementYZ::loadData()
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, created_at, updated_at FROM structure_seagoing_ship_section0_frame_arrangement_yz ORDER BY id");
+    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, is_manual, created_at, updated_at FROM structure_seagoing_ship_section0_frame_arrangement_yz ORDER BY id");
 
     if (!query.exec()) {
         m_lastError = QString("Failed to load frame arrangement YZ data: %1").arg(query.lastError().text());
@@ -153,33 +160,20 @@ bool FrameArrangementYZ::loadData()
         frame.frameNo = query.value(6).toInt();
         frame.fa = query.value(7).toString();
         frame.sym = query.value(8).toString();
-        frame.createdAt = query.value(9).toLongLong();
-        frame.updatedAt = query.value(10).toLongLong();
+    frame.isManual = query.value(9).toInt() != 0;
+    frame.createdAt = query.value(10).toLongLong();
+    frame.updatedAt = query.value(11).toLongLong();
 
         m_frameYZData.append(frame);
     }
 
-    // Sort by letter prefix of name (A→Z), ignore numeric suffix; stable by id within same prefix
+    // Optional sort by prefix for display stability (keep stored names intact)
     std::stable_sort(m_frameYZData.begin(), m_frameYZData.end(), [](const FrameYZData &a, const FrameYZData &b){
         const QString pa = extractLetterPrefix(a.name);
         const QString pb = extractLetterPrefix(b.name);
         if (pa == pb) return a.id < b.id;
         return pa < pb;
     });
-
-    // Group by prefix and renumber suffix within each prefix starting at 0,
-    // where suffix accumulates by the previous row's No within the same prefix.
-    {
-        QHash<QString, long long> counters; // suffix per prefix
-        for (FrameYZData &f : m_frameYZData) {
-            const QString p = extractLetterPrefix(f.name);
-            long long suffix = counters.value(p, 0);
-            f.name = p + QString::number(suffix);
-            // advance suffix by this row's No for next item in this prefix group
-            long long step = static_cast<long long>(qMax(1, f.no));
-            counters.insert(p, suffix + step);
-        }
-    }
 
     endResetModel();
     emit dataChanged();
@@ -199,7 +193,7 @@ bool FrameArrangementYZ::loadDataByFrameNo(int frameNumber)
     }
 
     QSqlQuery query(db);
-    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, created_at, updated_at FROM structure_seagoing_ship_section0_frame_arrangement_yz WHERE frame_no = ? ORDER BY id");
+    query.prepare("SELECT id, name, no, spacing, y, z, frame_no, fa, sym, is_manual, created_at, updated_at FROM structure_seagoing_ship_section0_frame_arrangement_yz WHERE frame_no = ? ORDER BY id");
     query.addBindValue(frameNumber);
 
     if (!query.exec()) {
@@ -223,33 +217,20 @@ bool FrameArrangementYZ::loadDataByFrameNo(int frameNumber)
         frame.frameNo = query.value(6).toInt();
         frame.fa = query.value(7).toString();
         frame.sym = query.value(8).toString();
-        frame.createdAt = query.value(9).toLongLong();
-        frame.updatedAt = query.value(10).toLongLong();
+    frame.isManual = query.value(9).toInt() != 0;
+    frame.createdAt = query.value(10).toLongLong();
+    frame.updatedAt = query.value(11).toLongLong();
 
         m_frameYZData.append(frame);
     }
 
-    // Sort by letter prefix of name (A→Z), ignore numeric suffix; stable by id within same prefix
+    // Optional sort by prefix for display stability (keep stored names intact)
     std::stable_sort(m_frameYZData.begin(), m_frameYZData.end(), [](const FrameYZData &a, const FrameYZData &b){
         const QString pa = extractLetterPrefix(a.name);
         const QString pb = extractLetterPrefix(b.name);
         if (pa == pb) return a.id < b.id;
         return pa < pb;
     });
-
-    // Group by prefix and renumber suffix within each prefix starting at 0,
-    // where suffix accumulates by the previous row's No within the same prefix.
-    {
-        QHash<QString, long long> counters; // suffix per prefix
-        for (FrameYZData &f : m_frameYZData) {
-            const QString p = extractLetterPrefix(f.name);
-            long long suffix = counters.value(p, 0);
-            f.name = p + QString::number(suffix);
-            long long step = static_cast<long long>(qMax(0, f.no));
-            step = qMax<long long>(1, step);
-            counters.insert(p, suffix + step);
-        }
-    }
 
     endResetModel();
     emit dataChanged();
@@ -271,8 +252,8 @@ int FrameArrangementYZ::insertFrame(const QString &name, int no, double spacing,
 
     QSqlQuery query(db);
     query.prepare("INSERT INTO structure_seagoing_ship_section0_frame_arrangement_yz "
-                  "(name, no, spacing, y, z, frame_no, fa, sym) "
-                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                  "(name, no, spacing, y, z, frame_no, fa, sym, is_manual) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
     
     query.addBindValue(name);
     query.addBindValue(no);
@@ -283,6 +264,10 @@ int FrameArrangementYZ::insertFrame(const QString &name, int no, double spacing,
     query.addBindValue(frameNo);
     query.addBindValue(fa);
     query.addBindValue(sym);
+    // Set manual flag if name contains digits (user-specified suffix)
+    bool manual = false;
+    for (const QChar &ch : name) { if (ch.isDigit()) { manual = true; break; } }
+    query.addBindValue(manual ? 1 : 0);
 
     if (!query.exec()) {
         m_lastError = QString("Failed to insert frame YZ: %1").arg(query.lastError().text());
@@ -629,6 +614,82 @@ void FrameArrangementYZ::clearData()
 QSqlDatabase FrameArrangementYZ::getDatabase() const
 {
     return DatabaseShipConnection::instance().getDatabase();
+}
+
+// ---- New helpers for manual/auto name handling ----
+static void parsePrefixSuffix(const QString &name, QString &prefix, int &suffix) {
+    prefix.clear(); suffix = 0;
+    int i = 0;
+    while (i < name.size() && name.at(i).isLetter()) { prefix.append(name.at(i).toUpper()); ++i; }
+    QString digits;
+    while (i < name.size() && name.at(i).isDigit()) { digits.append(name.at(i)); ++i; }
+    suffix = digits.isEmpty() ? 0 : digits.toInt();
+    if (prefix.isEmpty()) prefix = QStringLiteral("L");
+}
+
+QVariantList FrameArrangementYZ::checkSuffixConflict(const QString &prefixIn, int startSuffix, int count) const {
+    QString prefix = prefixIn.isEmpty() ? QStringLiteral("L") : prefixIn.toUpper();
+    QVariantList conflicts;
+    const int len = std::max(0, count);
+    const int endSuffix = startSuffix + (len > 0 ? (len - 1) : -1);
+    for (const auto &d : m_frameYZData) {
+        QString p; int s=0; parsePrefixSuffix(d.name, p, s);
+        if (p != prefix) continue;
+        const int cnt = std::max(0, d.no);
+        const int e = s + (cnt > 0 ? (cnt - 1) : -1);
+        if (std::max(startSuffix, s) <= std::min(endSuffix, e)) {
+            QVariantMap m;
+            m["startSuffix"] = s;
+            m["endSuffix"] = e;
+            m["reason"] = d.isManual ? "manual" : "auto";
+            conflicts.push_back(m);
+        }
+    }
+    return conflicts;
+}
+
+int FrameArrangementYZ::getLastSuffixForPrefix(const QString &prefixIn) const {
+    QString prefix = prefixIn.isEmpty() ? QStringLiteral("L") : prefixIn.toUpper();
+    int last = -1;
+    for (const auto &d : m_frameYZData) {
+        QString p; int s=0; parsePrefixSuffix(d.name, p, s);
+        if (p != prefix) continue;
+        const int cnt = std::max(0, d.no);
+        const int e = s + (cnt > 0 ? (cnt - 1) : -1);
+        last = std::max(last, e);
+    }
+    return last;
+}
+
+bool FrameArrangementYZ::updateFrameIsManual(int id, bool isManual)
+{
+    QSqlDatabase db = getDatabase();
+    if (!db.isValid()) { m_lastError = "DB invalid"; emit errorOccurred(m_lastError); return false; }
+    QSqlQuery query(db);
+    query.prepare("UPDATE structure_seagoing_ship_section0_frame_arrangement_yz SET is_manual=?, updated_at=(strftime('%s','now')*1000) WHERE id=?");
+    query.addBindValue(isManual ? 1 : 0);
+    query.addBindValue(id);
+    if (!query.exec()) { m_lastError = query.lastError().text(); emit errorOccurred(m_lastError); return false; }
+    loadData();
+    return true;
+}
+
+bool FrameArrangementYZ::assignManualNames(int id, const QString &prefixIn, int startSuffix, int count)
+{
+    Q_UNUSED(count)
+    QString prefix = prefixIn.isEmpty() ? QStringLiteral("L") : prefixIn.toUpper();
+    const QString name = prefix + QString::number(startSuffix);
+    if (!updateFrameName(id, name, false)) return false;
+    return updateFrameIsManual(id, true);
+}
+
+bool FrameArrangementYZ::assignAutoNamesFrom(int id, const QString &prefixIn, int continueFromSuffix, int count)
+{
+    Q_UNUSED(count)
+    QString prefix = prefixIn.isEmpty() ? QStringLiteral("L") : prefixIn.toUpper();
+    const QString name = prefix + QString::number(continueFromSuffix);
+    if (!updateFrameName(id, name, false)) return false;
+    return updateFrameIsManual(id, false);
 }
 
 // ---------------- YZ Drawing Table Operations ----------------

@@ -134,11 +134,7 @@ void FrameArrangementYZController::getFrameYZAll() {
 	if (!m_model->loadData()) { return; }
 	QVariantList rows;
 	for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
-	// Compute and persist auto-generated names before exposing to UI
-	computeAndPersistNames(rows);
-	// Reload rows again after potential name updates
-	rows.clear();
-	for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
+	// Do not auto-overwrite names here: respect manual entries; rows already reflect DB
 	setFrameYZList(generateObjectJson(rows));
 }
 
@@ -165,11 +161,43 @@ void FrameArrangementYZController::recomputeNames() {
 		if (!m_model->loadData()) return;
 		for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
 	}
-	computeAndPersistNames(rows);
+	// Intentionally skip recompute to avoid overwriting manual names; left here for future use if needed.
 	// Emit fresh list
 	rows.clear();
 	for (int i = 0; i < m_model->getRowCount(); ++i) rows.append(m_model->getFrameAtIndex(i));
 	setFrameYZList(generateObjectJson(rows));
+}
+
+QJsonArray FrameArrangementYZController::checkSuffixConflict(const QString &prefix, int startSuffix, int count) {
+	if (!m_model) { emit errorOccurred("Model not set"); return QJsonArray(); }
+	QVariantList v = m_model->checkSuffixConflict(prefix, startSuffix, count);
+	return generateObjectJson(v);
+}
+
+int FrameArrangementYZController::getLastSuffixForPrefix(const QString &prefix) {
+	if (!m_model) { emit errorOccurred("Model not set"); return -1; }
+	return m_model->getLastSuffixForPrefix(prefix);
+}
+
+bool FrameArrangementYZController::assignManualNames(int id, const QString &prefix, int startSuffix, int count) {
+	if (!m_model) { emit errorOccurred("Model not set"); return false; }
+	bool ok = m_model->assignManualNames(id, prefix, startSuffix, count);
+	if (ok) getFrameYZAll();
+	return ok;
+}
+
+bool FrameArrangementYZController::assignAutoNamesFrom(int id, const QString &prefix, int continueFromSuffix, int count) {
+	if (!m_model) { emit errorOccurred("Model not set"); return false; }
+	bool ok = m_model->assignAutoNamesFrom(id, prefix, continueFromSuffix, count);
+	if (ok) getFrameYZAll();
+	return ok;
+}
+
+bool FrameArrangementYZController::updateFrameIsManual(int id, bool isManual) {
+	if (!m_model) { emit errorOccurred("Model not set"); return false; }
+	bool ok = m_model->updateFrameIsManual(id, isManual);
+	if (ok) getFrameYZAll();
+	return ok;
 }
 
 void FrameArrangementYZController::computeAndPersistNames(const QVariantList &rows) {
