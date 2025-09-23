@@ -13,6 +13,8 @@ Rectangle {
     radius: 8
 
     property var tableModel: []
+    // track updates initiated locally to avoid refreshing and losing focus
+    property int _lastLocalUpdatedId: 0
     
     // Flag untuk prevent automatic recalculation during manual resize
     property bool isManuallyResizing: false
@@ -158,8 +160,9 @@ Rectangle {
     
     // Function untuk refresh data dari database
     function refreshData() {
-        if (materialModel) {
-            var materials = materialModel.getAllMaterialsForQML()
+        var api = materialsApi()
+        if (api) {
+            var materials = api.getAllMaterialsForQML()
             // Validasi data - pastikan setiap item memiliki id
             var validMaterials = []
             for (var i = 0; i < materials.length; i++) {
@@ -176,43 +179,87 @@ Rectangle {
             tableModel = [] // Set ke array kosong jika model tidak tersedia
         }
     }
+
+    // Helper untuk memilih API controller vs model
+    function materialsApi() {
+        return materialController ? materialController : (materialModel ? materialModel : null)
+    }
     
     // Helper function untuk focus + select all
     function focusAndSelect(targetInput) {
         targetInput.forceActiveFocus()
         targetInput.selectAll()
     }
+
+    // Track the globally active focus item; when a TextInput is focused,
+    // disable the ScrollView/flickable interactive behavior so arrow keys
+    // do not scroll the view while editing.
+    property var activeFocusedItem: Qt.application.activeFocusItem
+    onActiveFocusedItemChanged: {
+        try {
+            var af = activeFocusedItem
+            // Detect TextInput-like objects by presence of cursorPosition property
+            var isTextInput = af && af.cursorPosition !== undefined
+            if (scrollView && scrollView.contentItem) {
+                scrollView.contentItem.interactive = !isTextInput
+            }
+        } catch (e) {
+            // ignore runtime errors
+            console.warn('Error toggling scroll interactivity:', e)
+        }
+    }
+
+    // Centralized helper to focus a specific cell by row and column index
+    // colIndex mapping: 0=MatNo,1=E-Mod,2=G-Mod,3=Density,4=Y.Stress,5=Tensile,6=Remark
+    function focusCell(rowIdx, colIdx) {
+        if (rowIdx < 0) return
+        if (colIdx < 1) colIdx = 1 // first editable column is 1
+        if (materialRepeater && materialRepeater.count > rowIdx) {
+            var row = materialRepeater.itemAt(rowIdx)
+            if (!row) return
+            // children layout: 0=MatNo,1=E-Mod,2=G-Mod,3=Density,4=YieldStress,5=Tensile,6=Remark,7=Action
+            var cell = row.children[colIdx]
+            if (cell && cell.children && cell.children[0]) {
+                var input = cell.children[0]
+                input.forceActiveFocus()
+                input.selectAll()
+            }
+        }
+    }
     
     // Function untuk delete material
     function deleteMaterial(index, materialId) {
-        if (materialModel) {
-            if (materialModel.removeMaterial(materialId)) {
+        var api = materialsApi()
+        if (api) {
+            if (api.removeMaterial(materialId)) {
                 console.log("Material deleted successfully")
                 refreshData() // Refresh data setelah delete
             } else {
-                console.log("Failed to delete material:", materialModel.getLastError())
+                console.log("Failed to delete material:", api.getLastError())
             }
         }
     }
     
     // Function untuk add material baru dari shadow row
     function addNewMaterial(eModulus, gModulus, density, yieldStress, tensileStrength, remark) {
-        if (materialModel) {
-            if (materialModel.addMaterial(eModulus, gModulus, density, yieldStress, tensileStrength, remark)) {
+        var api = materialsApi()
+        if (api) {
+            if (api.addMaterial(eModulus, gModulus, density, yieldStress, tensileStrength, remark)) {
                 console.log("New material added successfully")
                 refreshData() // Refresh data setelah add
                 // Reset shadow row ke nilai default
                 resetShadowRow()
             } else {
-                console.log("Failed to add material:", materialModel.getLastError())
+                console.log("Failed to add material:", api.getLastError())
             }
         }
     }
     
     // Function untuk reset shadow row ke data terakhir
     function resetShadowRow() {
-        if (materialModel) {
-            var materials = materialModel.getAllMaterialsForQML()
+        var api = materialsApi()
+        if (api) {
+            var materials = api.getAllMaterialsForQML()
             if (materials.length > 0) {
                 var lastMaterial = materials[materials.length - 1]
                 shadowRow.resetToLastData(lastMaterial)
@@ -679,6 +726,8 @@ Rectangle {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             clip: true
+            // Prevent ScrollView from taking keyboard focus; let children handle keys
+            focusPolicy: Qt.NoFocus
             
             // Hanya scroll vertical
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -708,22 +757,58 @@ Rectangle {
                         clip: true  // Clip jika melebihi container
                         
                         function updateMaterial() {
-                            if (materialModel && materialData.id) {
-                                var success = materialModel.updateMaterial(
-                                    materialData.id,
-                                    parseInt(eModInput.text) || 0,
-                                    parseInt(gModInput.text) || 0,
-                                    parseInt(densityInput.text) || 0,
-                                    parseInt(yieldStressInput.text) || 0,
-                                    parseInt(tensileStrengthInput.text) || 0,
-                                    remarkInput.text || ""
-                                )
-                                if (success) {
-                                    console.log("Material updated successfully")
-                                    root.refreshData()
-                                } else {
-                                    console.log("Failed to update material:", materialModel.getLastError())
-                                }
+                            var api = materialsApi()
+                            if (!api || !materialData.id) return
+
+                            // Read new values from inputs
+                            var newEM = parseInt(eModInput.text) || 0
+                            var newG = parseInt(gModInput.text) || 0
+                            var newDensity = parseInt(densityInput.text) || 0
+                            var newYield = parseInt(yieldStressInput.text) || 0
+                            var newTensile = parseInt(tensileStrengthInput.text) || 0
+                            var newRemark = remarkInput.text || ""
+
+                            // Normalize existing values for comparison
+                            var oldEM = materialData.eMod !== undefined ? (parseInt(materialData.eMod) || 0) : 0
+                            var oldG = materialData.gMod !== undefined ? (parseInt(materialData.gMod) || 0) : 0
+                            var oldDensity = materialData.density !== undefined ? (parseInt(materialData.density) || 0) : 0
+                            var oldYield = materialData.yieldStress !== undefined ? (parseInt(materialData.yieldStress) || 0) : 0
+                            var oldTensile = materialData.tensileStrength !== undefined ? (parseInt(materialData.tensileStrength) || 0) : 0
+                            var oldRemark = materialData.remark !== undefined ? materialData.remark : ""
+
+                            // If nothing changed, skip update/commit
+                            if (newEM === oldEM && newG === oldG && newDensity === oldDensity &&
+                                newYield === oldYield && newTensile === oldTensile && newRemark === oldRemark) {
+                                // no change -> do nothing
+                                return
+                            }
+
+                            // Mark this id as locally-updated so Connections handler can ignore the following signal
+                            root._lastLocalUpdatedId = materialData.id
+
+                            var success = api.updateMaterial(
+                                materialData.id,
+                                newEM,
+                                newG,
+                                newDensity,
+                                newYield,
+                                newTensile,
+                                newRemark
+                            )
+                            if (success) {
+                                console.log("Material updated successfully")
+                                // Update the in-memory materialData so UI stays consistent without a full refresh
+                                materialData.eMod = newEM
+                                materialData.gMod = newG
+                                materialData.density = newDensity
+                                materialData.yieldStress = newYield
+                                materialData.tensileStrength = newTensile
+                                materialData.remark = newRemark
+                                // leave focus where it is; Connections will ignore the matching update signal
+                            } else {
+                                console.log("Failed to update material:", api.getLastError ? api.getLastError() : "unknown")
+                                // Clear the local marker on failure
+                                if (root._lastLocalUpdatedId === materialData.id) root._lastLocalUpdatedId = 0
                             }
                         }
 
@@ -767,57 +852,49 @@ Rectangle {
                                 KeyNavigation.down: eModInput // Will be set dynamically to next row
                                 KeyNavigation.left: eModInput // Stay in same cell (first column)
                                 KeyNavigation.right: gModInput
-                                
                                 Keys.onUpPressed: {
                                     if (rowIndex > 0) {
-                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[1] && prevRow.children[1].children[0]) {
-                                            prevRow.children[1].children[0].forceActiveFocus()
-                                            prevRow.children[1].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex - 1, 1)
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onDownPressed: {
                                     if (rowIndex < materialRepeater.count - 1) {
-                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[1] && nextRow.children[1].children[0]) {
-                                            nextRow.children[1].children[0].forceActiveFocus()
-                                            nextRow.children[1].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex + 1, 1)
+                                        event.accepted = true
                                     } else {
-                                        // Go to shadow row
                                         shadowEModInput.forceActiveFocus()
                                         shadowEModInput.selectAll()
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onRightPressed: {
                                     if (selectedText.length > 0) {
-                                        // If text is highlighted, move cursor to end
                                         cursorPosition = text.length
                                         event.accepted = true
                                     } else if (cursorPosition >= text.length) {
-                                        // If at end, move to next cell
-                                        gModInput.forceActiveFocus()
-                                        gModInput.selectAll()
+                                        root.focusCell(rowIndex, 2)
                                         event.accepted = true
                                     } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
+                                        // move cursor right inside the input and consume event
+                                        cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onLeftPressed: {
                                     if (selectedText.length > 0) {
-                                        // If text is highlighted, move cursor to beginning
                                         cursorPosition = 0
                                         event.accepted = true
                                     } else if (cursorPosition <= 0) {
-                                        // Stay in first column - just move to beginning
                                         cursorPosition = 0
                                         event.accepted = true
                                     } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
+                                        // move cursor left inside the input and consume event
+                                        cursorPosition = Math.max(0, cursorPosition - 1)
+                                        event.accepted = true
                                     }
                                 }
                                 
@@ -850,57 +927,47 @@ Rectangle {
                                 KeyNavigation.backtab: eModInput
                                 KeyNavigation.left: eModInput
                                 KeyNavigation.right: densityInput
-                                
                                 Keys.onUpPressed: {
                                     if (rowIndex > 0) {
-                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[2] && prevRow.children[2].children[0]) {
-                                            prevRow.children[2].children[0].forceActiveFocus()
-                                            prevRow.children[2].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex - 1, 2)
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onDownPressed: {
                                     if (rowIndex < materialRepeater.count - 1) {
-                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[2] && nextRow.children[2].children[0]) {
-                                            nextRow.children[2].children[0].forceActiveFocus()
-                                            nextRow.children[2].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex + 1, 2)
+                                        event.accepted = true
                                     } else {
                                         shadowGModInput.forceActiveFocus()
                                         shadowGModInput.selectAll()
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onLeftPressed: {
                                     if (selectedText.length > 0) {
-                                        // If text is highlighted, move cursor to beginning
                                         cursorPosition = 0
                                         event.accepted = true
                                     } else if (cursorPosition <= 0) {
-                                        // If at beginning, move to previous cell
-                                        eModInput.forceActiveFocus()
-                                        eModInput.selectAll()
+                                        root.focusCell(rowIndex, 1)
                                         event.accepted = true
                                     } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
+                                        cursorPosition = Math.max(0, cursorPosition - 1)
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onRightPressed: {
                                     if (selectedText.length > 0) {
-                                        // If text is highlighted, move cursor to end
                                         cursorPosition = text.length
                                         event.accepted = true
                                     } else if (cursorPosition >= text.length) {
-                                        // If at end, move to next cell
-                                        densityInput.forceActiveFocus()
-                                        densityInput.selectAll()
+                                        root.focusCell(rowIndex, 3)
                                         event.accepted = true
                                     } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
+                                        cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                        event.accepted = true
                                     }
                                 }
                                 
@@ -933,58 +1000,48 @@ Rectangle {
                                 KeyNavigation.backtab: gModInput
                                 KeyNavigation.left: gModInput
                                 KeyNavigation.right: yieldStressInput
-                                
                                 Keys.onUpPressed: {
                                     if (rowIndex > 0) {
-                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[3] && prevRow.children[3].children[0]) {
-                                            prevRow.children[3].children[0].forceActiveFocus()
-                                            prevRow.children[3].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex - 1, 3)
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onDownPressed: {
                                     if (rowIndex < materialRepeater.count - 1) {
-                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[3] && nextRow.children[3].children[0]) {
-                                            nextRow.children[3].children[0].forceActiveFocus()
-                                            nextRow.children[3].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex + 1, 3)
+                                        event.accepted = true
                                     } else {
                                         shadowDensityInput.forceActiveFocus()
                                         shadowDensityInput.selectAll()
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        // If text is highlighted, move cursor to beginning
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        // If at beginning, move to previous cell
-                                        gModInput.forceActiveFocus()
-                                        gModInput.selectAll()
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
-                                    }
+                                        if (selectedText.length > 0) {
+                                            cursorPosition = 0
+                                            event.accepted = true
+                                        } else if (cursorPosition <= 0) {
+                                            root.focusCell(rowIndex, 2)
+                                            event.accepted = true
+                                        } else {
+                                            cursorPosition = Math.max(0, cursorPosition - 1)
+                                            event.accepted = true
+                                        }
                                 }
-                                
+
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        // If text is highlighted, move cursor to end
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        // If at end, move to next cell
-                                        yieldStressInput.forceActiveFocus()
-                                        yieldStressInput.selectAll()
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
-                                    }
+                                        if (selectedText.length > 0) {
+                                            cursorPosition = text.length
+                                            event.accepted = true
+                                        } else if (cursorPosition >= text.length) {
+                                            root.focusCell(rowIndex, 4)
+                                            event.accepted = true
+                                        } else {
+                                            cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                            event.accepted = true
+                                        }
                                 }
                                 
                                 onEditingFinished: {
@@ -1016,54 +1073,48 @@ Rectangle {
                                 KeyNavigation.backtab: densityInput
                                 KeyNavigation.left: densityInput
                                 KeyNavigation.right: tensileStrengthInput
-                                
                                 Keys.onUpPressed: {
                                     if (rowIndex > 0) {
-                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[4] && prevRow.children[4].children[0]) {
-                                            prevRow.children[4].children[0].forceActiveFocus()
-                                            prevRow.children[4].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex - 1, 4)
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onDownPressed: {
                                     if (rowIndex < materialRepeater.count - 1) {
-                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[4] && nextRow.children[4].children[0]) {
-                                            nextRow.children[4].children[0].forceActiveFocus()
-                                            nextRow.children[4].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex + 1, 4)
+                                        event.accepted = true
                                     } else {
                                         shadowYieldStressInput.forceActiveFocus()
                                         shadowYieldStressInput.selectAll()
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        densityInput.forceActiveFocus()
-                                        densityInput.selectAll()
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
-                                    }
+                                        if (selectedText.length > 0) {
+                                            cursorPosition = 0
+                                            event.accepted = true
+                                        } else if (cursorPosition <= 0) {
+                                            root.focusCell(rowIndex, 3)
+                                            event.accepted = true
+                                        } else {
+                                            cursorPosition = Math.max(0, cursorPosition - 1)
+                                            event.accepted = true
+                                        }
                                 }
-                                
+
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        tensileStrengthInput.forceActiveFocus()
-                                        tensileStrengthInput.selectAll()
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
-                                    }
+                                        if (selectedText.length > 0) {
+                                            cursorPosition = text.length
+                                            event.accepted = true
+                                        } else if (cursorPosition >= text.length) {
+                                            root.focusCell(rowIndex, 5)
+                                            event.accepted = true
+                                        } else {
+                                            cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                            event.accepted = true
+                                        }
                                 }
                                 
                                 onEditingFinished: {
@@ -1095,53 +1146,49 @@ Rectangle {
                                 KeyNavigation.backtab: yieldStressInput
                                 KeyNavigation.left: yieldStressInput
                                 KeyNavigation.right: remarkInput
-                                
                                 Keys.onUpPressed: {
                                     if (rowIndex > 0) {
-                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[5] && prevRow.children[5].children[0]) {
-                                            prevRow.children[5].children[0].forceActiveFocus()
-                                            prevRow.children[5].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex - 1, 5)
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onDownPressed: {
                                     if (rowIndex < materialRepeater.count - 1) {
-                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[5] && nextRow.children[5].children[0]) {
-                                            nextRow.children[5].children[0].forceActiveFocus()
-                                            nextRow.children[5].children[0].selectAll()
-                                        }
+                                        root.focusCell(rowIndex + 1, 5)
+                                        event.accepted = true
                                     } else {
                                         shadowTensileStrengthInput.forceActiveFocus()
                                         shadowTensileStrengthInput.selectAll()
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onLeftPressed: {
                                     if (selectedText.length > 0) {
                                         cursorPosition = 0
                                         event.accepted = true
                                     } else if (cursorPosition <= 0) {
-                                        yieldStressInput.forceActiveFocus()
-                                        yieldStressInput.selectAll()
+                                        root.focusCell(rowIndex, 4)
                                         event.accepted = true
                                     } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
+                                        // move cursor left within this input
+                                        cursorPosition = Math.max(0, cursorPosition - 1)
+                                        event.accepted = true
                                     }
                                 }
-                                
+
                                 Keys.onRightPressed: {
                                     if (selectedText.length > 0) {
                                         cursorPosition = text.length
                                         event.accepted = true
                                     } else if (cursorPosition >= text.length) {
-                                        remarkInput.forceActiveFocus()
-                                        remarkInput.selectAll()
+                                        root.focusCell(rowIndex, 6)
                                         event.accepted = true
                                     } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
+                                        // move cursor right within this input
+                                        cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                        event.accepted = true
                                     }
                                 }
                                 
@@ -1174,52 +1221,49 @@ Rectangle {
                                 KeyNavigation.left: tensileStrengthInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = materialRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[6] && prevRow.children[6].children[0]) {
-                                            prevRow.children[6].children[0].forceActiveFocus()
-                                            prevRow.children[6].children[0].selectAll()
+                                        if (rowIndex > 0) {
+                                            root.focusCell(rowIndex - 1, 6)
+                                            event.accepted = true
                                         }
-                                    }
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < materialRepeater.count - 1) {
-                                        var nextRow = materialRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[6] && nextRow.children[6].children[0]) {
-                                            nextRow.children[6].children[0].forceActiveFocus()
-                                            nextRow.children[6].children[0].selectAll()
+                                        if (rowIndex < materialRepeater.count - 1) {
+                                            root.focusCell(rowIndex + 1, 6)
+                                            event.accepted = true
+                                        } else {
+                                            shadowRemarkInput.forceActiveFocus()
+                                            shadowRemarkInput.selectAll()
+                                            event.accepted = true
                                         }
-                                    } else {
-                                        shadowRemarkInput.forceActiveFocus()
-                                        shadowRemarkInput.selectAll()
-                                    }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        tensileStrengthInput.forceActiveFocus()
-                                        tensileStrengthInput.selectAll()
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
-                                    }
+                                        if (selectedText.length > 0) {
+                                            cursorPosition = 0
+                                            event.accepted = true
+                                        } else if (cursorPosition <= 0) {
+                                            tensileStrengthInput.forceActiveFocus()
+                                            tensileStrengthInput.selectAll()
+                                            event.accepted = true
+                                        } else {
+                                            cursorPosition = Math.max(0, cursorPosition - 1)
+                                            event.accepted = true
+                                        }
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        // Stay in last column - move cursor to end
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false  // Let default behavior handle cursor movement
-                                    }
+                                        if (selectedText.length > 0) {
+                                            cursorPosition = text.length
+                                            event.accepted = true
+                                        } else if (cursorPosition >= text.length) {
+                                            // Stay in last column - move cursor to end
+                                            cursorPosition = text.length
+                                            event.accepted = true
+                                        } else {
+                                            cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                            event.accepted = true
+                                        }
                                 }
                                 
                                 onEditingFinished: {
@@ -1429,7 +1473,8 @@ Rectangle {
                                     shadowGModInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1442,7 +1487,8 @@ Rectangle {
                                     cursorPosition = 0
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.max(0, cursorPosition - 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1495,7 +1541,8 @@ Rectangle {
                                     shadowEModInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.max(0, cursorPosition - 1)
+                                    event.accepted = true  // consume
                                 }
                             }
                             
@@ -1508,7 +1555,8 @@ Rectangle {
                                     shadowDensityInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                    event.accepted = true  // consume
                                 }
                             }
                             
@@ -1561,7 +1609,8 @@ Rectangle {
                                     shadowGModInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.max(0, cursorPosition - 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1574,7 +1623,8 @@ Rectangle {
                                     shadowYieldStressInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1627,7 +1677,8 @@ Rectangle {
                                     shadowDensityInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.max(0, cursorPosition - 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1640,7 +1691,8 @@ Rectangle {
                                     shadowTensileStrengthInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1692,7 +1744,8 @@ Rectangle {
                                     shadowYieldStressInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.max(0, cursorPosition - 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1705,7 +1758,8 @@ Rectangle {
                                     shadowRemarkInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1755,7 +1809,8 @@ Rectangle {
                                     shadowTensileStrengthInput.selectAll()
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.max(0, cursorPosition - 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1768,7 +1823,8 @@ Rectangle {
                                     cursorPosition = text.length
                                     event.accepted = true
                                 } else {
-                                    event.accepted = false  // Let default behavior handle cursor movement
+                                    cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                    event.accepted = true
                                 }
                             }
                             
@@ -1803,12 +1859,26 @@ Rectangle {
                     }
                 }
             }
+
+            // Let children process keys first; ScrollView won't consume arrow keys during editing
+            Keys.priority: Keys.AfterItem
+            Keys.onPressed: {
+                const k = event.key
+                const isArrow = (k === Qt.Key_Left || k === Qt.Key_Right || k === Qt.Key_Up || k === Qt.Key_Down)
+                if (!isArrow) return
+                // If a TextInput is focused, do not accept here; delegate to child handlers
+                const af = Qt.application.activeFocusItem
+                const isEditing = af && af.cursorPosition !== undefined
+                if (isEditing) {
+                    event.accepted = false
+                }
+            }
         }
     }
 
     // Connections untuk mendengarkan perubahan model
     Connections {
-        target: materialModel
+        target: materialController ? materialController : materialModel
         function onMaterialInserted(id) {
             console.log("Material inserted with ID:", id)
             root.refreshData()
@@ -1819,6 +1889,12 @@ Rectangle {
         }
         function onMaterialUpdated(id) {
             console.log("Material updated with ID:", id)
+            // If this update was initiated locally, ignore the signal to avoid losing focus
+            if (root._lastLocalUpdatedId && root._lastLocalUpdatedId === id) {
+                console.log("Ignoring local update signal for id:", id)
+                root._lastLocalUpdatedId = 0
+                return
+            }
             root.refreshData()
         }
         function onError(message) {
