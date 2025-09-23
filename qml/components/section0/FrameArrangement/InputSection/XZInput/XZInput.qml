@@ -39,17 +39,18 @@ ColumnLayout {
     }
     
     Component.onCompleted: {
-        console.log("XZInput component loaded, loading frame data...")
-        frameXZController.getFrameXZList()
+        console.log("XZInput component loaded, scheduling frame data load...")
+        Qt.callLater(function() { frameXZController.getFrameXZList() })
     }
     
     Connections {
         target: frameXZController
         function onFrameXZListChanged() {
-            console.log("Frame XZ list updated, count:", frameXZController.frameXZList.length)
+            // Defer reading the list length to avoid binding-time evaluation loops
+            Qt.callLater(function() { console.log("Frame XZ list updated, count:", frameXZController.frameXZList.length) })
         }
         function onErrorOccurred(error) {
-            console.error("Frame XZ Controller Error:", error)
+            Qt.callLater(function() { console.error("Frame XZ Controller Error:", error) })
         }
     }
 
@@ -187,7 +188,8 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     horizontalAlignment: TextInput.AlignHCenter
                                     verticalAlignment: TextInput.AlignVCenter
-                                    validator: IntValidator { bottom: 0 }
+                                    // Allow negative frame numbers (Python logic supports negatives)
+                                    validator: IntValidator { bottom: -999999 }
                                     selectByMouse: true
                                     color: "#000000"
                                     
@@ -292,7 +294,8 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     horizontalAlignment: TextInput.AlignHCenter
                                     verticalAlignment: TextInput.AlignVCenter
-                                    validator: IntValidator { bottom: 0 }
+                                    // Allow negative frame numbers in shadow row as well
+                                    validator: IntValidator { bottom: -999999 }
                                     selectByMouse: true
                                     color: "#000000"
                                     

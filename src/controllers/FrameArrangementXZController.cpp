@@ -11,6 +11,19 @@ FrameArrangementXZController::FrameArrangementXZController(QObject *parent)
 {
 }
 
+// Take a snapshot of current rows directly from the model (no QML refresh/sort)
+static QVariantList snapshotRowsFromModel(FrameArrangementXZ* model)
+{
+    QVariantList rows;
+    if (!model) return rows;
+    const int n = model->getRowCount();
+    rows.reserve(n);
+    for (int i = 0; i < n; ++i) {
+        rows.append(model->getFrameAtIndex(i));
+    }
+    return rows;
+}
+
 void FrameArrangementXZController::setFrameXZList(const QJsonArray &list)
 {
     if (m_frameXZList != list) {
@@ -55,7 +68,7 @@ void FrameArrangementXZController::insertFrameXZ(const QString &frameName, int f
     if (success) {
         int lastId = getXZLastId();
         insertBody(frameName, "", lastId);
-        getFrameXZList();
+            QMetaObject::invokeMethod(this, "getFrameXZList", Qt::QueuedConnection);
         checkIsFrameZero();
         
         qDebug() << "FrameArrangementXZController::insertFrameXZ() - Frame inserted successfully";
@@ -99,7 +112,7 @@ void FrameArrangementXZController::deleteFrameXZ(int id)
 
     bool success = m_model->deleteFrame(id);
     if (success) {
-        getFrameXZList();
+            QMetaObject::invokeMethod(this, "getFrameXZList", Qt::QueuedConnection);
         qDebug() << "FrameArrangementXZController::deleteFrameXZ() - Frame deleted successfully";
     } else {
         qCritical() << "FrameArrangementXZController::deleteFrameXZ() - Failed to delete frame";
@@ -111,7 +124,7 @@ void FrameArrangementXZController::updateFrameXZ(int id, const QString &frameNam
                                                 const QString &ml, double xpCoor, double xl, double xllCoor, double xllLll)
 {
     if (!m_model) {
-        qCritical() << "FrameArrangementXZController::updateFrameXZ() - Model not set";
+            QMetaObject::invokeMethod(this, "getFrameXZList", Qt::QueuedConnection);
         emit errorOccurred("Model not set");
         return;
     }
@@ -184,7 +197,7 @@ void FrameArrangementXZController::updateFrameXZMl(int id, const QString &ml)
     );
 
     if (success) {
-        getFrameXZList();
+            QMetaObject::invokeMethod(this, "getFrameXZList", Qt::QueuedConnection);
         qDebug() << "FrameArrangementXZController::updateFrameXZMl() - Frame ML updated successfully";
     } else {
         qCritical() << "FrameArrangementXZController::updateFrameXZMl() - Failed to update frame ML";
@@ -247,7 +260,7 @@ void FrameArrangementXZController::resetFrameXZ()
 
     bool success = m_model->resetDatabase();
     if (success) {
-        getFrameXZList();
+            QMetaObject::invokeMethod(this, "getFrameXZList", Qt::QueuedConnection);
         qDebug() << "FrameArrangementXZController::resetFrameXZ() - Database reset successfully";
     } else {
         qCritical() << "FrameArrangementXZController::resetFrameXZ() - Failed to reset database";
@@ -293,11 +306,9 @@ void FrameArrangementXZController::recalcAndUpdateRow(int id, int frameNumber, i
         return;
     }
 
-    // Always refresh from DB first so calculations use latest data
-    getFrameXZList();
-    if (m_frameXZList.isEmpty()) { emit errorOccurred("No rows available"); return; }
-
-    QVariantList rows = qjsonArrayToList(m_frameXZList);
+    // Do NOT refresh/sort while editing. Use a direct snapshot from the model.
+    QVariantList rows = snapshotRowsFromModel(m_model);
+    if (rows.isEmpty()) { emit errorOccurred("No rows available"); return; }
 
     // Find previous row with frameNumber < new frameNumber (max)
     QVariantMap prev;
@@ -317,20 +328,24 @@ void FrameArrangementXZController::recalcAndUpdateRow(int id, int frameNumber, i
     double upperL = getShipLengthL();
     if (hasPrev) deriveLengthsFromPrev(prev, lpp, upperL, lpp, upperL);
 
-    // Compute coordinates
+    // Compute coordinates (match Python logic)
+    // Cases:
+    // - If frameNumber > 0 and there is a previous row: use previous.xpCoor and previous.frame_spacing
+    // - If frameNumber < 0: use current frameSpacing directly
+    // - Else (e.g., first row or frameNumber == 0 or no previous): set to 0
     double xp = 0.0, xll = 0.0;
-    if (frameNumber < 0) {
-        xp = (static_cast<double>(frameNumber) * frameSpacing) / 1000.0;
-        xll = xp;
-    } else if (hasPrev) {
+    if (frameNumber > 0 && hasPrev) {
         const int prevNum = prev.value("frameNumber").toInt();
-        const int prevSpa = prev.value("frameSpacing").toInt();
-        const int diff = std::max(0, frameNumber - prevNum);
-        xp = prev.value("xpCoor").toDouble() + (static_cast<double>(diff) * prevSpa) / 1000.0;
+        const int prevSpa = prev.value("frameSpacing").toInt(); // mm
+        const int diff = frameNumber - prevNum; // can assume >0 given guard
+        xp = prev.value("xpCoor").toDouble() + (static_cast<double>(diff) * prevSpa) / 1000.0; // m
+        xll = xp;
+    } else if (frameNumber < 0) {
+        xp = (static_cast<double>(frameNumber) * frameSpacing) / 1000.0; // m, use current spacing
         xll = xp;
     } else {
-        xp = (static_cast<double>(frameNumber) * frameSpacing) / 1000.0;
-        xll = xp;
+        xp = 0.0;
+        xll = 0.0;
     }
     const double xl = (lpp > 0.0) ? (xp / lpp) : 0.0;
     const double xllLll = (upperL > 0.0) ? (xll / upperL) : 0.0;
@@ -356,8 +371,10 @@ void FrameArrangementXZController::recalcAndUpdateRow(int id, int frameNumber, i
         changedData["xllLll"] = xllLll;
         checkChangedFrameXZ(changedData, frameNumber);
     }
+    // Now that update is complete, refresh and cascade as before
+    getFrameXZList();
     checkIsFrameZero();
-    // Note: checkChangedFrameXZ and insertFrameXZ (called by checkIsFrameZero) already refresh the list
+    // Note: getFrameXZList triggers view update; sorting happens after commit, not during typing
 }
 
 void FrameArrangementXZController::insertWithRecalc(const QString &frameName, int frameNumber, int frameSpacing, const QString &ml)
@@ -368,10 +385,12 @@ void FrameArrangementXZController::insertWithRecalc(const QString &frameName, in
         return;
     }
 
-    if (m_frameXZList.isEmpty()) {
-        getFrameXZList();
-    }
-    QVariantList rows = qjsonArrayToList(m_frameXZList);
+    // Use a fresh snapshot directly from the model to avoid stale cached list
+    QVariantList rows = snapshotRowsFromModel(m_model);
+    // Sort by frameNumber to ensure correct prev selection
+    std::sort(rows.begin(), rows.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap()["frameNumber"].toInt() < b.toMap()["frameNumber"].toInt();
+    });
 
     // Find previous row with frameNumber < new frameNumber (max)
     QVariantMap prev;
@@ -391,18 +410,18 @@ void FrameArrangementXZController::insertWithRecalc(const QString &frameName, in
     if (hasPrev) deriveLengthsFromPrev(prev, lpp, upperL, lpp, upperL);
 
     double xp = 0.0, xll = 0.0;
-    if (frameNumber < 0) {
-        xp = (static_cast<double>(frameNumber) * frameSpacing) / 1000.0;
-        xll = xp;
-    } else if (hasPrev) {
+    if (frameNumber > 0 && hasPrev) {
         const int prevNum = prev.value("frameNumber").toInt();
-        const int prevSpa = prev.value("frameSpacing").toInt();
-        const int diff = std::max(0, frameNumber - prevNum);
-        xp = prev.value("xpCoor").toDouble() + (static_cast<double>(diff) * prevSpa) / 1000.0;
+        const int prevSpa = prev.value("frameSpacing").toInt(); // mm
+        const int diff = frameNumber - prevNum;
+        xp = prev.value("xpCoor").toDouble() + (static_cast<double>(diff) * prevSpa) / 1000.0; // m
+        xll = xp;
+    } else if (frameNumber < 0) {
+        xp = (static_cast<double>(frameNumber) * frameSpacing) / 1000.0; // m
         xll = xp;
     } else {
-        xp = (static_cast<double>(frameNumber) * frameSpacing) / 1000.0;
-        xll = xp;
+        xp = 0.0;
+        xll = 0.0;
     }
     const double xl = (lpp > 0.0) ? (xp / lpp) : 0.0;
     const double xllLll = (upperL > 0.0) ? (xll / upperL) : 0.0;
@@ -447,8 +466,12 @@ void FrameArrangementXZController::checkIsFrameZero()
 void FrameArrangementXZController::checkChangedFrameXZ(const QVariantMap &changedData, int changedFrameNumber)
 {
     QVariantMap defaultData = changedData;
-    QVariantList listFrameXZ = qjsonArrayToList(m_frameXZList);
-    
+    // Take fresh snapshot and sort by frameNumber
+    QVariantList listFrameXZ = snapshotRowsFromModel(m_model);
+    std::sort(listFrameXZ.begin(), listFrameXZ.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap()["frameNumber"].toInt() < b.toMap()["frameNumber"].toInt();
+    });
+
     // Filter data with frame numbers greater than the changed frame number
     QVariantList filteredData;
     for (const QVariant &item : listFrameXZ) {
@@ -474,12 +497,12 @@ void FrameArrangementXZController::checkChangedFrameXZ(const QVariantMap &change
             double xpCoor = (selisihFrame * defaultData["frameSpacing"].toInt() / 1000.0) + defaultData["xpCoor"].toDouble();  // Changed to toInt()
             
             double lpp = getShipLength();
-            double xl = xpCoor / lpp;
-            
+            double xl = (lpp > 0.0) ? (xpCoor / lpp) : 0.0;
+
             double xllCoor = xpCoor;
-            
+
             double upperL = getShipLengthL();
-            double xllLll = xllCoor / upperL;
+            double xllLll = (upperL > 0.0) ? (xllCoor / upperL) : 0.0;
             
             // Update frame
             bool success = m_model->updateFrame(id, frameName, frameNumber, frameSpacing,
@@ -503,14 +526,14 @@ double FrameArrangementXZController::getShipLength() const
 {
     // TODO: Implement this based on your ship data source
     // This should return the ship's LPP (Length between perpendiculars)
-    return 100.0; // Placeholder value
+    return 87.780; // Placeholder value
 }
 
 double FrameArrangementXZController::getShipLengthL() const
 {
     // TODO: Implement this based on your ship data source
     // This should return the ship's overall length
-    return 105.0; // Placeholder value
+    return 87.7824000000000; // Placeholder value
 }
 
 QJsonArray FrameArrangementXZController::generateObjectJson(const QVariantList &data)
