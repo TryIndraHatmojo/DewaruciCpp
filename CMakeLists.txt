@@ -17,6 +17,7 @@ qt_add_executable(appDewaruciCpp
     src/database/models/FrameArrangementXZ.cpp
     src/database/models/FrameArrangementYZ.cpp
     src/controllers/StructureProfileTableController.cpp
+    src/controllers/LinearIsotropicMaterialsController.cpp
     src/controllers/FrameArrangementXZController.cpp
     src/controllers/FrameArrangementYZController.cpp
     src/controllers/FrameArrangementYZFrameController.cpp
@@ -38,6 +39,7 @@ qt_add_qml_module(appDewaruciCpp
         ./qml/components/section0/FrameArrangement/InputSection/YZInput/PopUpAddChoice.qml
         ./qml/components/section0/FrameArrangement/InputSection/YZInput/PopUpManualName.qml
         ./qml/components/section0/FrameArrangement/Frame/YZFrame.qml
+        ./qml/pages/MaterialAndProfileLibrary.qml
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
