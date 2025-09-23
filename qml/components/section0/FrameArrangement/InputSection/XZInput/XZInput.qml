@@ -236,26 +236,32 @@ ColumnLayout {
                                     
                                     Keys.onRightPressed: {
                                         if (selectedText.length > 0) {
+                                            // If some text is selected, move cursor to end first
                                             cursorPosition = text.length
                                             event.accepted = true
                                         } else if (cursorPosition >= text.length) {
+                                            // At right edge -> move focus to spacing and select
                                             focusAndSelect(frameSpacingInput)
                                             event.accepted = true
                                         } else {
+                                            // Cursor is inside text, let it move normally
                                             event.accepted = false
                                         }
                                     }
                                     
                                     Keys.onLeftPressed: {
-                                        if (selectedText.length > 0) {
-                                            cursorPosition = 0
-                                            event.accepted = true
-                                        } else if (cursorPosition <= 0) {
-                                            cursorPosition = 0
-                                            event.accepted = true
-                                        } else {
-                                            event.accepted = false
-                                        }
+                                            if (selectedText.length > 0) {
+                                                // If some text is selected, move cursor to start
+                                                cursorPosition = 0
+                                                event.accepted = true
+                                            } else if (cursorPosition <= 0) {
+                                                // At left edge -> keep cursor at start (no further left navigation here)
+                                                cursorPosition = 0
+                                                event.accepted = true
+                                            } else {
+                                                // Cursor is inside text, let it move normally
+                                                event.accepted = false
+                                            }
                                     }
                                     
                                     onEditingFinished: {
@@ -343,12 +349,15 @@ ColumnLayout {
                                     
                                     Keys.onRightPressed: {
                                         if (selectedText.length > 0) {
+                                            // If some text is selected, move cursor to end first
                                             cursorPosition = text.length
                                             event.accepted = true
                                         } else if (cursorPosition >= text.length) {
-                                            mlComboBox.forceActiveFocus()
+                                            // At right edge -> move focus to ML and ensure it receives focus/selection
+                                            focusAndSelect(mlComboBox)
                                             event.accepted = true
                                         } else {
+                                            // Cursor is inside text, let it move normally
                                             event.accepted = false
                                         }
                                     }
@@ -446,12 +455,19 @@ ColumnLayout {
                                     Keys.onRightPressed: {
                                         // Move to next row's Frame Number
                                         var nextIndex = index + 1
-                                        var listView = parent.parent.parent.parent.parent
+                                        var listView = frameList
                                         if (nextIndex < listView.count) {
-                                            var nextItem = listView.itemAt(nextIndex)
-                                            if (nextItem) {
-                                                var nextFrameNumberInput = nextItem.children[0].children[1].children[0].children[0]
-                                                focusAndSelect(nextFrameNumberInput)
+                                            listView.currentIndex = nextIndex
+                                            Qt.callLater(function() {
+                                                if (listView.currentItem && listView.currentItem.focusColumn) {
+                                                    listView.currentItem.focusColumn(0)
+                                                }
+                                            })
+                                        } else {
+                                            // If at last data row, move into shadow/footer row Frame No.
+                                            frameList.focusedColumn = 0
+                                            if (frameList.footerItem && frameList.footerItem.focusColumn) {
+                                                frameList.footerItem.focusColumn(0)
                                             }
                                         }
                                         event.accepted = true
