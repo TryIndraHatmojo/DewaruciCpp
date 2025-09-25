@@ -210,43 +210,10 @@ ApplicationWindow {
     // Component for Material and Profile Library page
     Component {
         id: materialProfileComponent
-        
-        Rectangle {
-            color: "#f0f0f0"
-            
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 20
 
-                // Top panel - Linear Isotropic Materials
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.preferredHeight: parent.height * 0.4
-                    spacing: 10
-
-                    LinearIsotropicMaterials {
-                        id: materialTable
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
-                }
-
-                // Bottom panel - Profile Table
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.preferredHeight: parent.height * 0.6
-                    spacing: 10
-
-                    ProfileTable {
-                        id: profileTable
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
-                }
-            }
+        MaterialAndProfileLibrary {
+            // The page itself handles layout and child components
+            anchors.fill: parent
         }
     }
 

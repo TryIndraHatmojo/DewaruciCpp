@@ -352,6 +352,43 @@ Rectangle {
         targetInput.selectAll()
     }
 
+    // Track the globally active focus item; when a TextInput is focused,
+    // disable the ScrollView interactive behavior so arrow keys do not scroll
+    // while editing.
+    property var activeFocusedItem: Qt.application.activeFocusItem
+    onActiveFocusedItemChanged: {
+        try {
+            var af = activeFocusedItem
+            var isTextInput = af && af.cursorPosition !== undefined
+            if (scrollView && scrollView.contentItem) {
+                scrollView.contentItem.interactive = !isTextInput
+            }
+        } catch (e) {
+            console.warn('Error toggling scroll interactivity:', e)
+        }
+    }
+
+    // Generic helper to focus a cell by row and column index (column index matches delegate children order)
+    function focusCell(rowIdx, colIdx) {
+        // If request is for footer (shadow) row
+        if (rowIdx >= profileRepeater.count) {
+            // Map column index to shadow field ids (match delegate order)
+            var shadowMap = [ null, shadowNameField, shadowHwField, shadowTwField, shadowBfProfilesField, shadowTfField, shadowAreaField, shadowEField, shadowWField, shadowUpperIField, shadowLowerLField, shadowTbField, shadowBfBracketsField, shadowTbfField ]
+            var target = shadowMap[colIdx]
+            if (target) focusAndSelect(target)
+            return
+        }
+
+        if (rowIdx < 0) return
+        var item = profileRepeater.itemAt(rowIdx)
+        if (!item) return
+        // delegate children correspond to columns; the TextInput/Combo is the first child inside the Rectangle cell
+        var cell = item.children[colIdx]
+        if (!cell) return
+        var input = cell.children && cell.children.length > 0 ? cell.children[0] : null
+        if (input) focusAndSelect(input)
+    }
+
     // Helper function untuk format angka ke 2 decimal places
     function formatToTwoDecimals(value) {
         var numValue = parseFloat(value) || 0
@@ -2008,24 +2045,12 @@ Rectangle {
                                 KeyNavigation.right: hwInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[1] && prevRow.children[1].children[0]) {
-                                            focusAndSelect(prevRow.children[1].children[0])
-                                        }
-                                    }
+                                    if (rowIndex > 0) root.focusCell(rowIndex - 1, 1)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[1] && nextRow.children[1].children[0]) {
-                                            focusAndSelect(nextRow.children[1].children[0])
-                                        }
-                                    } else {
-                                        // Go to shadow row
-                                        focusAndSelect(shadowNameField)
-                                    }
+                                    if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 1)
+                                    else root.focusCell(profileRepeater.count, 1)
                                 }
                                 
                                 Keys.onRightPressed: {
@@ -2033,10 +2058,11 @@ Rectangle {
                                         cursorPosition = text.length
                                         event.accepted = true
                                     } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(hwInput)
+                                        root.focusCell(rowIndex, 2)
                                         event.accepted = true
                                     } else {
-                                        event.accepted = false
+                                        cursorPosition = Math.min(text.length, cursorPosition + 1)
+                                        event.accepted = true
                                     }
                                 }
                                 
@@ -2048,7 +2074,8 @@ Rectangle {
                                         cursorPosition = 0
                                         event.accepted = true
                                     } else {
-                                        event.accepted = false
+                                        cursorPosition = Math.max(0, cursorPosition - 1)
+                                        event.accepted = true
                                     }
                                 }
                                 
@@ -2101,47 +2128,24 @@ Rectangle {
                                 KeyNavigation.right: twInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[2] && prevRow.children[2].children[0]) {
-                                            focusAndSelect(prevRow.children[2].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 2)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[2] && nextRow.children[2].children[0]) {
-                                            focusAndSelect(nextRow.children[2].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowHwField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 2)
+                                        else root.focusCell(profileRepeater.count, 2)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(twInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                    if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                    else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 3); event.accepted = true }
+                    else { cursorPosition = Math.min(text.length, cursorPosition + 1); event.accepted = true }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(nameInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 1); event.accepted = true }
+                        else { cursorPosition = Math.max(0, cursorPosition - 1); event.accepted = true }
                                 }
                                 
                                 onEditingFinished: {
@@ -2201,47 +2205,24 @@ Rectangle {
                                 KeyNavigation.right: bfProfilesInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[3] && prevRow.children[3].children[0]) {
-                                            focusAndSelect(prevRow.children[3].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 3)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[3] && nextRow.children[3].children[0]) {
-                                            focusAndSelect(nextRow.children[3].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowTwField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 3)
+                                        else root.focusCell(profileRepeater.count, 3)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(bfProfilesInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 4); event.accepted = true }
+                        else { cursorPosition = Math.min(text.length, cursorPosition + 1); event.accepted = true }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(hwInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 2); event.accepted = true }
+                        else { cursorPosition = Math.max(0, cursorPosition - 1); event.accepted = true }
                                 }
                                 
                                 onEditingFinished: {
@@ -2301,47 +2282,24 @@ Rectangle {
                                 KeyNavigation.right: tfInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[4] && prevRow.children[4].children[0]) {
-                                            focusAndSelect(prevRow.children[4].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 4)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[4] && nextRow.children[4].children[0]) {
-                                            focusAndSelect(nextRow.children[4].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowBfProfilesField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 4)
+                                        else root.focusCell(profileRepeater.count, 4)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(tfInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 5); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(twInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 3); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -2401,47 +2359,24 @@ Rectangle {
                                 KeyNavigation.right: areaInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[5] && prevRow.children[5].children[0]) {
-                                            focusAndSelect(prevRow.children[5].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 5)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[5] && nextRow.children[5].children[0]) {
-                                            focusAndSelect(nextRow.children[5].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowTfField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 5)
+                                        else root.focusCell(profileRepeater.count, 5)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(areaInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 6); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(bfProfilesInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 4); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -2501,47 +2436,24 @@ Rectangle {
                                 KeyNavigation.right: eInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[6] && prevRow.children[6].children[0]) {
-                                            focusAndSelect(prevRow.children[6].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 6)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[6] && nextRow.children[6].children[0]) {
-                                            focusAndSelect(nextRow.children[6].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowAreaField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 6)
+                                        else root.focusCell(profileRepeater.count, 6)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(eInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 7); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(tfInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 5); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -2578,47 +2490,24 @@ Rectangle {
                                 KeyNavigation.right: wInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[7] && prevRow.children[7].children[0]) {
-                                            focusAndSelect(prevRow.children[7].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 7)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[7] && nextRow.children[7].children[0]) {
-                                            focusAndSelect(nextRow.children[7].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowEField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 7)
+                                        else root.focusCell(profileRepeater.count, 7)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(wInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 8); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(areaInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 6); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -2655,47 +2544,24 @@ Rectangle {
                                 KeyNavigation.right: upperIInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[8] && prevRow.children[8].children[0]) {
-                                            focusAndSelect(prevRow.children[8].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 8)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[8] && nextRow.children[8].children[0]) {
-                                            focusAndSelect(nextRow.children[8].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowWField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 8)
+                                        else root.focusCell(profileRepeater.count, 8)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(upperIInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 9); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(eInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 7); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -2732,47 +2598,24 @@ Rectangle {
                                 KeyNavigation.right: lowerLInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[9] && prevRow.children[9].children[0]) {
-                                            focusAndSelect(prevRow.children[9].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 9)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[9] && nextRow.children[9].children[0]) {
-                                            focusAndSelect(nextRow.children[9].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowUpperIField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 9)
+                                        else root.focusCell(profileRepeater.count, 9)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(lowerLInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 10); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(wInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 8); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -2809,47 +2652,24 @@ Rectangle {
                                 KeyNavigation.right: tbInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[10] && prevRow.children[10].children[0]) {
-                                            focusAndSelect(prevRow.children[10].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 10)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[10] && nextRow.children[10].children[0]) {
-                                            focusAndSelect(nextRow.children[10].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowLowerLField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 10)
+                                        else root.focusCell(profileRepeater.count, 10)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(tbInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 11); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(upperIInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 9); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -2887,47 +2707,24 @@ Rectangle {
                                 KeyNavigation.right: bfBracketsInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[11] && prevRow.children[11].children[0]) {
-                                            focusAndSelect(prevRow.children[11].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 11)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[11] && nextRow.children[11].children[0]) {
-                                            focusAndSelect(nextRow.children[11].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowTbField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 11)
+                                        else root.focusCell(profileRepeater.count, 11)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(bfBracketsInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 12); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(lowerLInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 10); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -2964,47 +2761,24 @@ Rectangle {
                                 KeyNavigation.right: tbfInput
                                 
                                 Keys.onUpPressed: {
-                                    if (rowIndex > 0) {
-                                        var prevRow = profileRepeater.itemAt(rowIndex - 1)
-                                        if (prevRow && prevRow.children[12] && prevRow.children[12].children[0]) {
-                                            focusAndSelect(prevRow.children[12].children[0])
-                                        }
-                                    }
+                                        if (rowIndex > 0) root.focusCell(rowIndex - 1, 12)
                                 }
                                 
                                 Keys.onDownPressed: {
-                                    if (rowIndex < profileRepeater.count - 1) {
-                                        var nextRow = profileRepeater.itemAt(rowIndex + 1)
-                                        if (nextRow && nextRow.children[12] && nextRow.children[12].children[0]) {
-                                            focusAndSelect(nextRow.children[12].children[0])
-                                        }
-                                    } else {
-                                        focusAndSelect(shadowBfBracketsField)
-                                    }
+                                        if (rowIndex < profileRepeater.count - 1) root.focusCell(rowIndex + 1, 12)
+                                        else root.focusCell(profileRepeater.count, 12)
                                 }
                                 
                                 Keys.onRightPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = text.length
-                                        event.accepted = true
-                                    } else if (cursorPosition >= text.length) {
-                                        focusAndSelect(tbfInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = text.length; event.accepted = true }
+                                        else if (cursorPosition >= text.length) { root.focusCell(rowIndex, 13); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 Keys.onLeftPressed: {
-                                    if (selectedText.length > 0) {
-                                        cursorPosition = 0
-                                        event.accepted = true
-                                    } else if (cursorPosition <= 0) {
-                                        focusAndSelect(tbInput)
-                                        event.accepted = true
-                                    } else {
-                                        event.accepted = false
-                                    }
+                                        if (selectedText.length > 0) { cursorPosition = 0; event.accepted = true }
+                                        else if (cursorPosition <= 0) { root.focusCell(rowIndex, 11); event.accepted = true }
+                                        else { event.accepted = false }
                                 }
                                 
                                 onEditingFinished: {
@@ -4327,6 +4101,17 @@ Rectangle {
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // Prevent ScrollView from handling arrow keys when a TextInput is focused
+            Keys.onPressed: {
+                var k = event.key
+                if (k === Qt.Key_Left || k === Qt.Key_Right || k === Qt.Key_Up || k === Qt.Key_Down) {
+                    var af = Qt.application.activeFocusItem
+                    if (af && af.cursorPosition !== undefined) {
+                        event.accepted = true
                     }
                 }
             }

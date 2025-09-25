@@ -39,17 +39,18 @@ ColumnLayout {
     }
     
     Component.onCompleted: {
-        console.log("XZInput component loaded, loading frame data...")
-        frameXZController.getFrameXZList()
+        console.log("XZInput component loaded, scheduling frame data load...")
+        Qt.callLater(function() { frameXZController.getFrameXZList() })
     }
     
     Connections {
         target: frameXZController
         function onFrameXZListChanged() {
-            console.log("Frame XZ list updated, count:", frameXZController.frameXZList.length)
+            // Defer reading the list length to avoid binding-time evaluation loops
+            Qt.callLater(function() { console.log("Frame XZ list updated, count:", frameXZController.frameXZList.length) })
         }
         function onErrorOccurred(error) {
-            console.error("Frame XZ Controller Error:", error)
+            Qt.callLater(function() { console.error("Frame XZ Controller Error:", error) })
         }
     }
 
@@ -187,9 +188,10 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     horizontalAlignment: TextInput.AlignHCenter
                                     verticalAlignment: TextInput.AlignVCenter
-                                    validator: IntValidator { bottom: 0 }
+                                    // Allow negative frame numbers (Python logic supports negatives)
+                                    validator: IntValidator { bottom: -999999 }
                                     selectByMouse: true
-                                    color: "#2c3e50"
+                                    color: "#000000"
                                     
                                     // Rectangle {
                                     //     anchors.fill: parent
@@ -234,26 +236,32 @@ ColumnLayout {
                                     
                                     Keys.onRightPressed: {
                                         if (selectedText.length > 0) {
+                                            // If some text is selected, move cursor to end first
                                             cursorPosition = text.length
                                             event.accepted = true
                                         } else if (cursorPosition >= text.length) {
+                                            // At right edge -> move focus to spacing and select
                                             focusAndSelect(frameSpacingInput)
                                             event.accepted = true
                                         } else {
+                                            // Cursor is inside text, let it move normally
                                             event.accepted = false
                                         }
                                     }
                                     
                                     Keys.onLeftPressed: {
-                                        if (selectedText.length > 0) {
-                                            cursorPosition = 0
-                                            event.accepted = true
-                                        } else if (cursorPosition <= 0) {
-                                            cursorPosition = 0
-                                            event.accepted = true
-                                        } else {
-                                            event.accepted = false
-                                        }
+                                            if (selectedText.length > 0) {
+                                                // If some text is selected, move cursor to start
+                                                cursorPosition = 0
+                                                event.accepted = true
+                                            } else if (cursorPosition <= 0) {
+                                                // At left edge -> keep cursor at start (no further left navigation here)
+                                                cursorPosition = 0
+                                                event.accepted = true
+                                            } else {
+                                                // Cursor is inside text, let it move normally
+                                                event.accepted = false
+                                            }
                                     }
                                     
                                     onEditingFinished: {
@@ -292,9 +300,10 @@ ColumnLayout {
                                     font.pixelSize: 10
                                     horizontalAlignment: TextInput.AlignHCenter
                                     verticalAlignment: TextInput.AlignVCenter
-                                    validator: IntValidator { bottom: 0 }
+                                    // Allow negative frame numbers in shadow row as well
+                                    validator: IntValidator { bottom: -999999 }
                                     selectByMouse: true
-                                    color: "#2c3e50"
+                                    color: "#000000"
                                     
                                     // Rectangle {
                                     //     anchors.fill: parent
@@ -340,12 +349,15 @@ ColumnLayout {
                                     
                                     Keys.onRightPressed: {
                                         if (selectedText.length > 0) {
+                                            // If some text is selected, move cursor to end first
                                             cursorPosition = text.length
                                             event.accepted = true
                                         } else if (cursorPosition >= text.length) {
-                                            mlComboBox.forceActiveFocus()
+                                            // At right edge -> move focus to ML and ensure it receives focus/selection
+                                            focusAndSelect(mlComboBox)
                                             event.accepted = true
                                         } else {
+                                            // Cursor is inside text, let it move normally
                                             event.accepted = false
                                         }
                                     }
@@ -443,12 +455,19 @@ ColumnLayout {
                                     Keys.onRightPressed: {
                                         // Move to next row's Frame Number
                                         var nextIndex = index + 1
-                                        var listView = parent.parent.parent.parent.parent
+                                        var listView = frameList
                                         if (nextIndex < listView.count) {
-                                            var nextItem = listView.itemAt(nextIndex)
-                                            if (nextItem) {
-                                                var nextFrameNumberInput = nextItem.children[0].children[1].children[0].children[0]
-                                                focusAndSelect(nextFrameNumberInput)
+                                            listView.currentIndex = nextIndex
+                                            Qt.callLater(function() {
+                                                if (listView.currentItem && listView.currentItem.focusColumn) {
+                                                    listView.currentItem.focusColumn(0)
+                                                }
+                                            })
+                                        } else {
+                                            // If at last data row, move into shadow/footer row Frame No.
+                                            frameList.focusedColumn = 0
+                                            if (frameList.footerItem && frameList.footerItem.focusColumn) {
+                                                frameList.footerItem.focusColumn(0)
                                             }
                                         }
                                         event.accepted = true
@@ -473,7 +492,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: "#f0f0f0"
                                 border.color: "#ddd"
                                 border.width: 1
                                 
@@ -491,7 +510,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: "#f0f0f0"
                                 border.color: "#ddd"
                                 border.width: 1
                                 
@@ -509,7 +528,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: "#f0f0f0"
                                 border.color: "#ddd"
                                 border.width: 1
                                 
@@ -527,7 +546,7 @@ ColumnLayout {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                color: "transparent"
+                                color: "#f0f0f0"
                                 border.color: "#ddd"
                                 border.width: 1
                                 
@@ -834,13 +853,13 @@ ColumnLayout {
                             }
 
                             // Xp-Coor (readonly placeholder)
-                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f9fbff"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
+                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f0f0f0"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
                             // X/L
-                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f9fbff"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
+                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f0f0f0"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
                             // XLL-Coor
-                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f9fbff"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
+                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f0f0f0"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
                             // XLL/LLL
-                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f9fbff"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
+                            Rectangle { Layout.fillWidth: true; Layout.fillHeight: true; color: "#f0f0f0"; border.color: "#ddd"; border.width: 1; Text { anchors.centerIn: parent; font.pixelSize: 10; text: "" } }
 
                             // Action column (Add) styled like ProfileTable
                             Rectangle {

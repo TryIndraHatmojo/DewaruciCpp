@@ -9,8 +9,11 @@
 #include "src/database/models/FrameArrangementXZ.h"
 #include "src/database/models/FrameArrangementYZ.h"
 #include "src/controllers/StructureProfileTableController.h"
+#include "src/controllers/LinearIsotropicMaterialsController.h"
 #include "src/controllers/FrameArrangementXZController.h"
 #include "src/controllers/FrameArrangementYZController.h"
+#include "src/controllers/FrameArrangementYZFrameController.h"
+#include <QQmlEngine>
 
 int main(int argc, char *argv[])
 {
@@ -40,11 +43,13 @@ int main(int argc, char *argv[])
     FrameArrangementYZ* frameYZModel = new FrameArrangementYZ(&app);
     
     // Create controller instances
+    LinearIsotropicMaterialsController* materialController = new LinearIsotropicMaterialsController(&app);
     StructureProfileTableController* profileController = new StructureProfileTableController(&app);
     FrameArrangementXZController* frameXZController = new FrameArrangementXZController(&app);
     FrameArrangementYZController* frameYZController = new FrameArrangementYZController(&app);
     
     // Set model for controllers
+    materialController->setModel(materialModel);
     frameXZController->setModel(frameXZModel);
     frameYZController->setModel(frameYZModel);
     
@@ -67,9 +72,13 @@ int main(int argc, char *argv[])
     }
 
     QQmlApplicationEngine engine;
+
+    // Register custom painted item for YZ frame drawing
+    qmlRegisterType<FrameArrangementYZFrameController>("DewaruciCpp", 1, 0, "FrameArrangementYZFrameController");
     
     // Register model instances to QML
     engine.rootContext()->setContextProperty("materialModel", materialModel);
+    engine.rootContext()->setContextProperty("materialController", materialController);
     engine.rootContext()->setContextProperty("frameXZModel", frameXZModel);
     engine.rootContext()->setContextProperty("frameYZModel", frameYZModel);
     engine.rootContext()->setContextProperty("profileController", profileController);
